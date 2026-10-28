@@ -1,6 +1,6 @@
 # RAG-AI
 
-RAG-AI is an enterprise knowledge assistant under development. This repository currently provides the Python API foundation and a local PostgreSQL database with pgvector. Retrieval, LLM integration, and the React client are planned for later milestones.
+RAG-AI is an enterprise knowledge assistant under development. This repository provides a Python API, in-memory document text extraction, and a local PostgreSQL database with pgvector. Retrieval, LLM integration, and the React client are planned for later milestones.
 
 ## Requirements
 
@@ -39,10 +39,31 @@ RAG-AI is an enterprise knowledge assistant under development. This repository c
 4. Run the API:
 
    ```bash
-   uvicorn rag_ai.main:app --reload
+   uvicorn rag_ai.main:app --reload --host 127.0.0.1
    ```
 
    Visit `http://127.0.0.1:8000/health` for liveness and `http://127.0.0.1:8000/docs` for API documentation.
+
+## Document parsing
+
+The parse route is **disabled by default**. To use it for local development, set both values in `.env`:
+
+```dotenv
+APP_ENV=development
+ENABLE_DOCUMENT_PARSE_ENDPOINT=true
+```
+
+`APP_ENV` accepts `development`, `test`, or `production` and defaults to `production`; the enable flag defaults to `false`. The route is registered only when both development settings above are present. Enabling it in production causes application startup to fail with a configuration error. The route has no authentication: use it only on a trusted machine through `127.0.0.1`, and do not expose it on a public or shared network.
+
+`POST /documents/parse` accepts one multipart field named `file`. It supports `.pdf` (`application/pdf`), `.txt` (`text/plain`), and `.md` (`text/markdown`, `text/x-markdown`, or `text/plain`). Text and Markdown must be UTF-8. For example:
+
+```bash
+curl -F 'file=@notes.md;type=text/markdown' http://127.0.0.1:8000/documents/parse
+```
+
+The JSON response includes a SHA-256 `document_id` based on the uploaded bytes, a safe filename, file type, extracted `text`, and `extraction_metadata`. PDFs also return `page_count` and one-based page numbers with text for each page. TXT and Markdown return `page_count: null` and `encoding: "utf-8"`.
+
+The endpoint rejects unsupported formats and content types (HTTP 415), oversized files or extracted text (413), and empty, invalid, or non-UTF-8 content (422). Image-only PDFs return a `scanned_pdf` error; OCR is not included. `MAX_UPLOAD_SIZE_BYTES` defaults to 10 MiB, `MAX_PDF_PAGES` to 500, and `MAX_EXTRACTED_CHARACTERS` to 2 million. All are configurable in `.env`. The application reads at most one byte beyond the file limit, closes the upload after processing, and does not persist document contents. The multipart framework may temporarily spool uploads to disk before the route checks their size. Any future deployment that accepts documents needs authentication, authorization, and an ingress request-size limit. See the [security test plan](docs/SECURITY_TEST_PLAN.md).
 
 ## Tests
 
@@ -54,13 +75,14 @@ Tests exercise the HTTP API without requiring a running database. `/health` repo
 
 ## Configuration
 
-The application reads environment variables and optionally `.env` from the working directory. `APP_NAME` changes the OpenAPI title. `DATABASE_URL` is reserved for the database integration milestone. Docker Compose reads `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, and optionally `POSTGRES_PORT` from `.env`. Use a managed secret store for deployed credentials; do not commit credentials or environment files.
+The application reads environment variables and optionally `.env` from the working directory. `APP_NAME` changes the OpenAPI title. `APP_ENV` and `ENABLE_DOCUMENT_PARSE_ENDPOINT` control development route registration. `MAX_UPLOAD_SIZE_BYTES` sets the document upload limit. `DATABASE_URL` is reserved for the database integration milestone. Docker Compose reads `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, and optionally `POSTGRES_PORT` from `.env`. Use a managed secret store for deployed credentials; do not commit credentials or environment files.
 
 ## Layout
 
 ```text
 src/rag_ai/api/       HTTP routes and response models
 src/rag_ai/core/      Typed application configuration
+src/rag_ai/documents/ Validated document extraction
 src/rag_ai/main.py    FastAPI application factory and entry point
 tests/               API tests
 docker/postgres/      Database initialization script
