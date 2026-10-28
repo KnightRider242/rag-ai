@@ -117,7 +117,7 @@ def _parse_pdf(
             total_characters = 0
             for index, page in enumerate(document):
                 page_text = page.get_text("text")
-                total_characters += len(page_text)
+                total_characters += len(page_text) + (2 if index else 0)
                 if total_characters > max_extracted_characters:
                     raise DocumentParseError(
                         "extracted_text_too_large", "The extracted text exceeds the configured limit.", 413

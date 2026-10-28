@@ -65,24 +65,42 @@ The JSON response includes a SHA-256 `document_id` based on the uploaded bytes, 
 
 The endpoint rejects unsupported formats and content types (HTTP 415), oversized files or extracted text (413), and empty, invalid, or non-UTF-8 content (422). Image-only PDFs return a `scanned_pdf` error; OCR is not included. `MAX_UPLOAD_SIZE_BYTES` defaults to 10 MiB, `MAX_PDF_PAGES` to 500, and `MAX_EXTRACTED_CHARACTERS` to 2 million. All are configurable in `.env`. The application reads at most one byte beyond the file limit, closes the upload after processing, and does not persist document contents. The multipart framework may temporarily spool uploads to disk before the route checks their size. Any future deployment that accepts documents needs authentication, authorization, and an ingress request-size limit. See the [security test plan](docs/SECURITY_TEST_PLAN.md).
 
+## Document chunking
+
+`POST /documents/chunk` accepts the same multipart `file` field and applies the same parsing and security checks as `/documents/parse`. It has the same development-only gate: set `APP_ENV=development` and `ENABLE_DOCUMENT_PARSE_ENDPOINT=true`, then run the API bound to `127.0.0.1` on a trusted machine. The endpoint is absent by default and in production.
+
+```bash
+curl -F 'file=@notes.md;type=text/markdown' http://127.0.0.1:8000/documents/chunk
+```
+
+The server uses LangChain's `RecursiveCharacterTextSplitter` with character counts (`len`). PDF pages are split separately, empty pages are skipped, and each chunk retains its one-based source page number. TXT and Markdown chunks have `page_number: null`. The response contains `document_id`, filename, file type, `total_chunks`, `chunk_size`, `chunk_overlap`, and a `chunks` list. Every chunk contains its SHA-256 `chunk_id`, document ID, filename, file type, page number, zero-based `chunk_index`, and text. Chunk IDs hash a canonical representation of the document ID, page, index, text, and chunking configuration, so repeating the same input and configuration yields the same IDs.
+
+| Setting | Default | Valid range |
+| --- | ---: | --- |
+| `CHUNK_SIZE` | 1000 | 64–10,000 characters |
+| `CHUNK_OVERLAP` | 150 | 0 to at most half of `CHUNK_SIZE` |
+| `MAX_CHUNKS_PER_DOCUMENT` | 5000 | 1–10,000 chunks |
+
+The server controls these settings through the environment; clients cannot override them per request. Actual overlap may vary because the splitter chooses text boundaries. Chunking returns HTTP 413 when the document exceeds the chunk count limit. A preflight check rejects sources whose non-whitespace text cannot fit within the remaining chunk budget. Chunks are returned in memory and are not stored or sent to an external service. LangChain still materializes a list for one source page or text document before the final count check; the extracted-character limit, minimum chunk size, and overlap cap reduce this remaining CPU and memory risk.
+
 ## Tests
 
 ```bash
 python -m pytest
 ```
 
-Tests exercise the HTTP API without requiring a running database. `/health` reports API process liveness; it does not assert database readiness.
+Tests exercise parsing and chunking through the HTTP API without requiring a running database. `/health` reports API process liveness; it does not assert database readiness.
 
 ## Configuration
 
-The application reads environment variables and optionally `.env` from the working directory. `APP_NAME` changes the OpenAPI title. `APP_ENV` and `ENABLE_DOCUMENT_PARSE_ENDPOINT` control development route registration. `MAX_UPLOAD_SIZE_BYTES` sets the document upload limit. `DATABASE_URL` is reserved for the database integration milestone. Docker Compose reads `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, and optionally `POSTGRES_PORT` from `.env`. Use a managed secret store for deployed credentials; do not commit credentials or environment files.
+The application reads environment variables and optionally `.env` from the working directory. `APP_NAME` changes the OpenAPI title. `APP_ENV` and `ENABLE_DOCUMENT_PARSE_ENDPOINT` control development route registration. Upload, extraction, and chunking limits are described above and in `.env.example`. `DATABASE_URL` is reserved for the database integration milestone. Docker Compose reads `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, and optionally `POSTGRES_PORT` from `.env`. Use a managed secret store for deployed credentials; do not commit credentials or environment files.
 
 ## Layout
 
 ```text
 src/rag_ai/api/       HTTP routes and response models
 src/rag_ai/core/      Typed application configuration
-src/rag_ai/documents/ Validated document extraction
+src/rag_ai/documents/ Validated extraction and deterministic chunking
 src/rag_ai/main.py    FastAPI application factory and entry point
 tests/               API tests
 docker/postgres/      Database initialization script
@@ -90,3 +108,13 @@ compose.yaml          Local PostgreSQL with pgvector
 ```
 
 The repository retains its [Apache 2.0 license](LICENSE).
+
+## Acknowledgements
+
+- [FastAPI](https://fastapi.tiangolo.com/) (MIT) powers the backend API; [PyMuPDF](https://pymupdf.readthedocs.io/) (AGPL or commercial license) extracts PDF text.
+- [LangChain text splitters](https://github.com/langchain-ai/langchain/tree/master/libs/text-splitters) (MIT) provides `RecursiveCharacterTextSplitter` for chunking. Other LangChain features are not implemented.
+- [PostgreSQL](https://www.postgresql.org/) and [pgvector](https://github.com/pgvector/pgvector) (PostgreSQL License) provide the local database foundation. Vector search is planned, not implemented.
+- [Python](https://www.python.org/) (PSF License) and [Pydantic](https://docs.pydantic.dev/) (MIT) support the backend and typed configuration.
+- [OpenAI Codex](https://openai.com/codex/) assisted with development and review. This acknowledgement does not imply endorsement by OpenAI or any other project listed here.
+
+Each third-party project remains the work of its respective authors and is governed by its own license. Review PyMuPDF's license terms before commercial distribution or deployment.
