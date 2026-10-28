@@ -1,6 +1,6 @@
 # RAG-AI
 
-RAG-AI is an enterprise knowledge assistant under development. This repository provides a Python API, in-memory document text extraction, and a local PostgreSQL database with pgvector. Retrieval, LLM integration, and the React client are planned for later milestones.
+RAG-AI is an enterprise knowledge assistant under development. This repository provides a Python API, in-memory document text extraction and chunking, and a local PostgreSQL database with pgvector. Retrieval, LLM integration, and the React client are planned for later milestones.
 
 ## Requirements
 
@@ -17,7 +17,7 @@ RAG-AI is an enterprise knowledge assistant under development. This repository p
 
    Update both `POSTGRES_PASSWORD` and the password in `DATABASE_URL` so they match. Keep `.env` local; it is ignored by Git.
 
-2. Create a virtual environment and install the backend with test dependencies:
+2. Create a virtual environment and install the backend with test dependencies (macOS/Linux example):
 
    ```bash
    python3.12 -m venv .venv
@@ -43,6 +43,8 @@ RAG-AI is an enterprise knowledge assistant under development. This repository p
    ```
 
    Visit `http://127.0.0.1:8000/health` for liveness and `http://127.0.0.1:8000/docs` for API documentation.
+
+The Python backend targets Windows, macOS, and Linux. On Windows PowerShell, use `Copy-Item .env.example .env`, `py -3.12 -m venv .venv`, `.venv\Scripts\Activate.ps1`, and `python -m pip install -e '.[dev]'` for steps 1–2; then use the same `docker compose` and `uvicorn` commands. Use an installed Python version 3.12 or newer. These are setup instructions, not a claim that the full test suite has been run on every platform.
 
 ## Document parsing
 
@@ -94,6 +96,10 @@ Tests exercise parsing and chunking through the HTTP API without requiring a run
 ## Configuration
 
 The application reads environment variables and optionally `.env` from the working directory. `APP_NAME` changes the OpenAPI title. `APP_ENV` and `ENABLE_DOCUMENT_PARSE_ENDPOINT` control development route registration. Upload, extraction, and chunking limits are described above and in `.env.example`. `DATABASE_URL` is reserved for the database integration milestone. Docker Compose reads `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, and optionally `POSTGRES_PORT` from `.env`. Use a managed secret store for deployed credentials; do not commit credentials or environment files.
+
+## Roadmap
+
+Phases 1–3 provide the backend foundation, development-only document ingestion, and document chunking. Phase 4 plans native [Ollama](https://ollama.com/download) on Windows, macOS, or Linux for local embeddings, with PostgreSQL and pgvector in Docker Compose. CPU inference and [supported GPU acceleration](https://docs.ollama.com/gpu) are planned according to host hardware. Later phases plan semantic retrieval, local cited text RAG, explicit cloud-provider choice, multimodal evidence, LangGraph workflows, MCP tools, a React frontend, and deployment hardening. Ollama integration and these later capabilities are not implemented. See the [full roadmap](docs/ROADMAP.md) and [architecture decisions](docs/ARCHITECTURE_DECISIONS.md).
 
 ## Layout
 

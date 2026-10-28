@@ -43,6 +43,7 @@ The development route has no authentication or tenant permissions and must be us
 - **Ingestion and chunking (current):** Reject deceptive or malformed input, bound file size and extraction/chunk creation work, preserve PDF page boundaries, treat content as data, avoid filesystem paths and content logging, and return clear errors.
 - **Persistence and retrieval (future):** Authenticate callers, authorize every document access, scope database and vector queries by tenant and document permissions, and test cross-tenant denial.
 - **LLM, embedding, and tracing integrations (future):** Require authorization before transferring confidential content, enforce provider data-handling controls, prevent retrieved instructions from gaining system authority, and exclude sensitive content from traces by default.
+- **Local/cloud and VLM providers (future):** Test that endpoint configuration and provider selection respect collection policy on Windows, macOS, and Linux; reject unauthorized cloud calls and any automatic cloud fallback, including after a local Ollama failure. Cover visual content and metadata as sensitive data.
 
 ## Known limitations and planned improvements
 

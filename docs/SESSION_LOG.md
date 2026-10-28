@@ -85,3 +85,35 @@
 - **Verification:** Complete pytest suite passed (80 passed, 0 failed; 13 Python 3.14 warnings from transitive `langsmith`). `git diff --check` passed. A targeted scan of 11 changed/untracked files found no credential-pattern matches. `.env`, `.venv`, caches, and generated package metadata are ignored and excluded from the intended commit.
 - **Outstanding issues:** Public document ingestion remains blocked by missing authentication, authorization, and ingress upload limits. LangChain can still materialize one source's chunks before the final count check; PDF parsing lacks a process CPU/memory budget.
 - **Next recommended task:** Verify the staged diff, commit with the approved message, push the feature branch, and confirm the remote commit and clean working tree. Do not merge, create a Pull Request, or begin Phase 4 in this session.
+
+## 2026-10-28 — Phase 3 publication wrap-up
+
+- **Branch:** `feat/document-chunking`, returned to this branch for the log update; the local checkout had moved to `main` before this wrap-up began.
+- **Completed:** Confirmed Phase 3 commit `3e2bb3eb027c6e5cdbb4819aece1ce302b5c4975` remains on `origin/feat/document-chunking`. Local `main` and `origin/main` point to merge commit `06e8d7db527972530cb5eb684ead439ed81f3fe4` (`Merge pull request #2 from KnightRider242/feat/document-chunking Approved`), which includes the Phase 3 commit. No code changes were made during this wrap-up.
+- **Verification:** The prior publication session ran the full pytest suite (80 passed, 0 failed; 13 third-party Python 3.14 warnings), reviewed the staged diff, and found no credential-pattern matches. This documentation-only wrap-up did not rerun tests, Docker, or a live API endpoint. The current Git state and history were inspected locally.
+- **Security and outstanding issues:** Development document routes remain unauthenticated and must be confined to trusted localhost use. Public ingestion still needs authentication, authorization, ingress limits, and processing isolation. LangChain may materialize one source's chunks before the final count check.
+- **Next recommended task:** Review this uncommitted log entry and decide how to publish the documentation update after the Phase 3 merge. Do not begin Phase 4 without an explicit request.
+
+## 2026-10-28 — Roadmap and architecture planning
+
+- **Branch:** `docs/roadmap-architecture`, created from local `main` after the Phase 3 merge. The prior uncommitted Phase 3 wrap-up log entry was preserved on this branch.
+- **Completed:** Added `docs/ROADMAP.md` with Phases 1–3 marked complete and Phases 4–13 explicitly planned. Added `docs/ARCHITECTURE_DECISIONS.md` covering local-first development, provider-independent embedding/LLM/vision boundaries, explicit local/cloud policy without confidential-data fallback, collection-scoped storage, embedding model and dimensionality tracking, source and visual provenance, separate development/evaluation data, security testing, and branch workflow. Added a concise README roadmap and clarified that chunking is already implemented. No Phase 4 code or dependencies were added.
+- **Verification:** `.venv/bin/python -m pytest -q` passed (80 passed, 0 failed; 13 Python 3.14 deprecation warnings from transitive `langsmith`). Reviewed documentation and `git diff --check`; no Docker or live API check was run for this documentation-only task.
+- **Security and outstanding issues:** This planning work introduces no runtime attack surface. Development document routes remain unauthenticated and localhost-only; future persistence needs collection authorization, and public ingestion still needs authentication, ingress limits, and resource isolation. Planning documents are uncommitted and unpushed.
+- **Next recommended task:** Review `git status --short`, `git diff --check`, and the two new documents. Request approval before committing or pushing this documentation branch. Begin Phase 4 only on a separate explicit request.
+
+## 2026-10-28 — Cross-platform roadmap audit
+
+- **Branch:** `docs/roadmap-architecture`; no commit, push, merge, or Pull Request was created in this session.
+- **Completed:** Audited README, roadmap, architecture decisions, security plan, and AGENTS.md against 15 documentation requirements. Added explicit Windows, macOS, and Linux Python setup direction; planned native Ollama with CPU or supported GPU inference and a configurable application endpoint; clarified independent embedding, LLM, and VLM interfaces, collection isolation, model compatibility, multimodal PDFs/figures, future cross-platform automated testing, and denial of unauthorized cloud fallback. Preserved all earlier log entries and marked future features as planned.
+- **Verification:** `.venv/bin/python -m pytest -q` passed (80 passed, 0 failed; 13 Python 3.14 deprecation warnings from transitive `langsmith`). `git diff --check` passed. Reviewed the documentation diff and official Ollama download, hardware, and API documentation. These tests ran on the current Linux host; Windows and macOS runtime behavior, Ollama, Docker, and a live API were not tested in this documentation session.
+- **Security and outstanding issues:** No runtime attack surface or dependencies were added. Future provider-policy tests must reject unauthorized cloud calls and fallback. Existing unauthenticated development routes remain localhost-only; public ingestion still requires authentication, authorization, ingress limits, and processing isolation. Cross-platform CI and Phase 4 integrations remain planned.
+- **Next recommended task:** Review the final documentation diff and untracked files, then request approval before any commit or push. Begin Phase 4 only on a separate explicit request.
+
+## 2026-10-28 — Architecture documentation publication review
+
+- **Branch:** `docs/roadmap-architecture`; user approved committing, pushing, and opening a Pull Request to `main`, without merging.
+- **Completed:** Reviewed all five intended documentation files, including both new planning documents; confirmed the README and security plan updates, append-only session history, and absence of application code or dependency changes.
+- **Verification:** Complete `.venv/bin/python -m pytest -q` suite passed (80 passed, 0 failed; 13 Python 3.14 deprecation warnings from transitive `langsmith`). `git diff --check` passed. A targeted scan found no credential-pattern matches in the five changed files.
+- **Security and outstanding issues:** Documentation adds no runtime attack surface. Future cloud-provider policy, collection access, cross-platform CI, and deployment controls remain unimplemented. Existing development routes remain localhost-only and unauthenticated.
+- **Next recommended task:** Check the staged diff, commit with the approved message, push the documentation branch, and create a Pull Request for review. Do not merge or begin Phase 4.
