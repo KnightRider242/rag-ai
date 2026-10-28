@@ -2,9 +2,9 @@
 
 These decisions describe the approved direction as of 2026-10-28. They guide future work; they do not imply that planned integrations exist. Revisit a decision on its feature branch if implementation evidence warrants a change, and record the reason.
 
-## Current baseline (Phases 1–3)
+## Current baseline (Phases 1–4)
 
-The FastAPI backend exposes `/health` and, with explicit development configuration, in-memory `/documents/parse` and `/documents/chunk` routes. PDF, TXT, and Markdown extraction and LangChain text splitting are implemented. PostgreSQL with pgvector is configured for local development, but the API has no database integration. There are no embeddings, retrieval, LLM calls, vision models, agents, MCP tools, or frontend yet.
+The FastAPI backend exposes `/health` and, with explicit development configuration, `/documents/parse`, `/documents/chunk`, and `/collections/{collection_id}/documents/index`. PDF, TXT, and Markdown extraction, LangChain text splitting, and local Ollama embeddings persisted in PostgreSQL/pgvector are implemented. The indexing route stores original bytes, chunks, and vectors. It has no authentication or collection authorization and is restricted to trusted localhost development. There is no retrieval, answer generation, cloud provider, vision model, agent, MCP tool, or frontend yet.
 
 ## AD-01 — Local-first and explicit processing location
 
@@ -12,7 +12,7 @@ The FastAPI backend exposes `/health` and, with explicit development configurati
 
 **Reason:** Processing location affects confidentiality and data-handling obligations. A local-first path keeps early integration tests independent of external credentials and services.
 
-**Implementation status:** Policy direction approved; provider calls and policy enforcement are not implemented.
+**Implementation status:** Phase 4 implements a loopback-only Ollama embedding provider with no cloud fallback. General data-classification policy and cloud-provider authorization are not implemented.
 
 ## AD-02 — Provider-independent capabilities
 
@@ -20,7 +20,7 @@ The FastAPI backend exposes `/health` and, with explicit development configurati
 
 **Reason:** Provider changes should not alter document ownership, provenance, or authorization behavior.
 
-**Implementation status:** Planned for Phases 4, 7, and 8 as each capability arrives.
+**Implementation status:** A small embedding provider interface and local Ollama implementation exist. LLM and VLM interfaces remain planned for Phases 7–8.
 
 ## AD-03 — Collection-scoped persistence and vector compatibility
 
@@ -28,7 +28,7 @@ The FastAPI backend exposes `/health` and, with explicit development configurati
 
 **Reason:** Collection boundaries prevent accidental cross-tenant access; model metadata prevents silently comparing vectors from incompatible spaces.
 
-**Implementation status:** Planned for Phases 4–5. Current SHA-256 document and chunk IDs are deterministic identifiers, not access tokens.
+**Implementation status:** Phase 4 stores collection-scoped documents, chunks, vectors, model names, Ollama digests, measured dimensions, and chunking configuration. Database keys and foreign keys keep records within a collection. Explicit versioned SQL migrations track the schema; an existing unversioned Phase 4 schema requires verified adoption. Storage-layer document deletion removes a collection's original bytes and derived rows transactionally, with no automatic retention expiry or HTTP deletion route. Authorization and retrieval filters remain planned; a collection UUID and SHA-256 IDs are not access tokens. Re-indexing one document replaces its prior chunks and vectors in that collection.
 
 ## AD-04 — Preserve sources and trace citations
 
@@ -36,7 +36,7 @@ The FastAPI backend exposes `/health` and, with explicit development configurati
 
 **Reason:** Answers need verifiable evidence, and later multimodal features need source provenance.
 
-**Implementation status:** Current parsing preserves PDF page numbers and chunk IDs but stores no original files or citations. Persistent provenance is planned for Phases 4, 6, 8, and 9.
+**Implementation status:** Phase 4 retains original source bytes, filenames, document IDs, chunk IDs, and PDF page numbers in the local database. Citation resolution and visual provenance remain planned for Phases 6, 8, and 9.
 
 ## AD-05 — Separate evaluation data and security gates
 
@@ -60,4 +60,4 @@ The FastAPI backend exposes `/health` and, with explicit development configurati
 
 **Reason:** Local development should work across supported operating systems without coupling database deployment to inference hardware. Platform and accelerator differences must be tested rather than assumed.
 
-**Implementation status:** Python and Docker Compose setup exist. Native Ollama integration, its configurable application endpoint, accelerator validation, and cross-platform CI are planned; they are not implemented.
+**Implementation status:** The Python backend uses a configurable loopback Ollama endpoint and the existing Docker Compose pgvector database. The local integration was verified on Nobara Linux 44 with `embeddinggemma:300m` and a 768-dimensional provider response. Windows/macOS runtime behavior, accelerator validation, and cross-platform CI are not yet verified.
