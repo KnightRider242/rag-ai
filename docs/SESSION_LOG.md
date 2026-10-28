@@ -21,3 +21,11 @@
 - **Verification:** Staged diff checks passed before commit. The latest automated test run passed (2 passed, 0 failed). The prior Phase 1 audit verified healthy PostgreSQL with pgvector `0.8.7` and a live `/health` HTTP 200 response. After push, remote `main` matched the local commit and the working tree was clean.
 - **Outstanding issues:** None for Phase 1. No Phase 2 work was started.
 - **Next recommended task:** Plan Phase 2 only when requested. Resume with `git status --short`, `git log -1 --oneline`, and `.venv/bin/python -m pytest` before new backend work.
+
+## 2026-10-28 — Git branching and reporting workflow
+
+- **Branch:** `docs/git-workflow`, created from the clean Phase 1 commit. The existing `feat/document-ingestion` branch was left untouched.
+- **Completed:** Added branch naming, feature preparation and completion checks, approval gates, Conventional Commits, Pull Request, squash merge, and post-merge synchronization rules to `AGENTS.md`. Expanded mandatory reports to include Pull Request status and interrupted-session recovery.
+- **Verification:** Reviewed the documentation diff and Git status. Automated tests, Docker, and API endpoints were not run for this documentation-only task.
+- **Outstanding issues:** The documentation changes are uncommitted and unpushed; no Pull Request exists. No feature implementation was started.
+- **Next recommended task:** Review `git diff --check`, `git diff`, and `git status --short`; request approval before any commit or push. Resume on `docs/git-workflow` with `git branch --show-current`.
