@@ -281,3 +281,21 @@ def test_security_document_content_is_not_logged(caplog: pytest.LogCaptureFixtur
 
     assert response.status_code == 200
     assert marker not in caplog.text
+
+
+def test_pdf_joined_text_respects_extracted_character_limit() -> None:
+    with pymupdf.open() as document:
+        for text in ("First", "Second"):
+            page = document.new_page()
+            page.insert_text((72, 72), text)
+        content = document.tobytes()
+
+    with pymupdf.open(stream=content, filetype="pdf") as document:
+        page_text_length = sum(len(page.get_text("text")) for page in document)
+
+    with pytest.raises(DocumentParseError) as exc_info:
+        parse("joined.pdf", "application/pdf", content, max_characters=page_text_length)
+
+    assert exc_info.value.code == "extracted_text_too_large"
+    result = parse("joined.pdf", "application/pdf", content, max_characters=page_text_length + 2)
+    assert len(result.text) == page_text_length + 2
