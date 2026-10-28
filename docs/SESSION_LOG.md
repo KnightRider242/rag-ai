@@ -29,3 +29,35 @@
 - **Verification:** Reviewed the documentation diff and Git status. Automated tests, Docker, and API endpoints were not run for this documentation-only task.
 - **Outstanding issues:** The documentation changes are uncommitted and unpushed; no Pull Request exists. No feature implementation was started.
 - **Next recommended task:** Review `git diff --check`, `git diff`, and `git status --short`; request approval before any commit or push. Resume on `docs/git-workflow` with `git branch --show-current`.
+
+## 2026-10-28 — Phase 2 document ingestion
+
+- **Branch:** `feat/document-ingestion`.
+- **Completed:** Added PDF, TXT, and Markdown extraction with SHA-256 document IDs, per-page PDF text and metadata, UTF-8 validation, format and MIME checks, configurable upload limits, and `POST /documents/parse`. Updated configuration and README. No persistence, OCR, chunking, embeddings, or later-phase integrations were added.
+- **Verification:** Complete pytest suite passed (23 passed, 0 failed), including the Phase 1 health tests and multipart API requests with synthetic PDF, TXT, and Markdown files. Reviewed Git changes and upload handling; no content logging, execution, or permanent document storage is present. Docker was not run because ingestion does not use the database.
+- **Outstanding issues:** Multipart parsing may spool a large request to temporary disk before the route enforces its file-size limit; deployments should also cap request size at the ingress proxy. Image-only PDFs need OCR, which is outside this phase.
+- **Next recommended task:** Review `git diff --check`, `git diff`, and `git status --short`. Request approval before committing, pushing, or preparing a Pull Request to `main`.
+
+## 2026-10-28 — Security rules and Phase 2 ingestion review
+
+- **Branch:** `feat/document-ingestion`; no commit, push, merge, or Pull Request was created in this session.
+- **Completed:** Added mandatory Security-by-Design and security review reporting rules to `AGENTS.md`; created `docs/SECURITY_TEST_PLAN.md`; reviewed the ingestion trust boundaries; added configurable PDF page and extracted-text limits, safer filename validation, and negative tests for spoofing, path traversal, resource limits, literal document instructions, and content logging.
+- **Verification:** Complete pytest suite passed (34 passed, 0 failed). Security-focused subset passed (11 passed, 0 failed). `git diff --check` passed, and a targeted secret-pattern scan found no matches in project files. Docker and a live network API server were not run; multipart API behavior was exercised in tests with synthetic documents.
+- **Outstanding risks:** The development parse endpoint has no authentication, and multipart uploads can spool before route-level size enforcement. These are high-severity blockers for public or production deployment; do not recommend merge into a deployed environment until access control and an ingress request-size limit are in place. PDF parsing also lacks process isolation and a CPU/time budget.
+- **Next recommended task:** Review `git diff --check`, `git diff`, and `git status --short`, then decide how to protect or disable the parse route in deployed environments. Request approval before any commit, push, or merge. Do not start Phase 3 without a separate request.
+
+## 2026-10-28 — Phase 2 development-only parse gate
+
+- **Branch:** `feat/document-ingestion`; no commit, push, merge, or Pull Request was created in this session.
+- **Completed:** Added `APP_ENV` (`development`, `test`, `production`) and `ENABLE_DOCUMENT_PARSE_ENDPOINT` (default `false`). The parse route registers only with explicit development opt-in; enabling it in production fails configuration validation. Kept ingestion validation unchanged and updated README and the security test plan for trusted-machine, localhost-only use.
+- **Verification:** Complete pytest suite passed (39 passed, 0 failed), including Phase 1 health and existing ingestion tests. Gate/security subset passed (16 passed, 0 failed). Tests confirmed default and production route absence, explicit development access, and production misconfiguration rejection. `git diff --check` passed, and a targeted secret-pattern scan found no matches. Docker and a live network server were not run.
+- **Outstanding risks:** The enabled development route has no authentication and must not be exposed beyond a trusted localhost machine. Future public document ingestion still needs authentication, authorization, an ingress request-size cap, and stronger PDF resource isolation.
+- **Next recommended task:** Review `git branch --show-current`, `git status --short`, and `git diff --check`; request approval before any commit, push, or merge. Do not begin Phase 3 without a separate request.
+
+## 2026-10-28 — Phase 2 Pull Request publication
+
+- **Branch:** `feat/document-ingestion`.
+- **Completed:** Reviewed all modified and untracked Phase 2 files, committed and pushed the approved document ingestion feature, and opened a Pull Request targeting `main` for review. No merge or later-phase feature was started.
+- **Verification:** Complete pytest suite passed (39 passed, 0 failed), including the two Phase 1 health tests. `git diff --check` passed before commit, `.env` remained ignored, the security documentation was included, and a targeted scan found no secret patterns in project files.
+- **Security and deployment limits:** The parse route is disabled by default and cannot be enabled in production. When explicitly enabled in development, use it only on a trusted localhost machine. Public document ingestion still needs authentication, authorization, an ingress request-size limit, and stronger PDF resource isolation.
+- **Next recommended task:** Review the Pull Request and its checks. Do not merge until review and successful tests; request explicit approval before merging. Do not start another feature without a separate request.

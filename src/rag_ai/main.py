@@ -3,14 +3,19 @@
 from fastapi import FastAPI
 
 from rag_ai.api.health import router as health_router
-from rag_ai.core.config import get_settings
+from rag_ai.api.documents import router as documents_router
+from rag_ai.core.config import Settings, get_settings
 
 
-def create_app() -> FastAPI:
+def create_app(settings: Settings | None = None) -> FastAPI:
     """Create the HTTP application."""
-    settings = get_settings()
+    if settings is None:
+        settings = get_settings()
     app = FastAPI(title=settings.app_name)
+    app.state.settings = settings
     app.include_router(health_router)
+    if settings.app_env == "development" and settings.enable_document_parse_endpoint:
+        app.include_router(documents_router)
     return app
 
 
