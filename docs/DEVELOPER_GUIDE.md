@@ -24,6 +24,6 @@ The architecture favors a small provider interface, collection-scoped keys, expl
 
 Before implementation, describe the user behavior, learning goal, alternatives, and trust boundaries. After implementation, trace one input through the changed modules, read the relevant tests, run the smallest meaningful check, and explain a failure path and a design trade-off in your own words. Record significant decisions in [architecture decisions](ARCHITECTURE_DECISIONS.md), keeping planned behavior separate from code that exists.
 
-## Pending operational documentation
+## Local database operations
 
-A later documentation task should explain PostgreSQL password rotation with `psql \password`, synchronization of `POSTGRES_PASSWORD` and `DATABASE_URL`, password URL encoding, why an existing Docker volume does not automatically adopt changed initialization credentials, secure backup and restore verification, and backup-first explicit adoption of an unversioned Phase 4 schema. These operations were **not performed** for this guide; consult [database migrations](DATABASE_MIGRATIONS.md) before any adoption.
+The [PostgreSQL operations guide](DATABASE_MIGRATIONS.md) explains password management, private backups, archive checks, and backup-first explicit adoption of an unversioned Phase 4 schema. Reading it does not authorize any state-changing operation. The local database's last user-reported status was unversioned; this guide does not claim it has been adopted.

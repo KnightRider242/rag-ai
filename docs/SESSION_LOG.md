@@ -157,3 +157,37 @@
 - **Verification:** Checked the four manifests for matching names, short activation descriptions, and absence of scripts or broad tool permissions (4/4 passed). Checked seven untracked files for trailing whitespace and resolved 18 local guide/map links. A targeted credential-pattern scan of nine intended files found no matches. `git diff --check -- AGENTS.md docs/SESSION_LOG.md` passed. Full `git diff --check` failed on two trailing-whitespace lines in the pre-existing `src/rag_ai/documents/indexer.py` edit; the source file was not changed under this documentation-only authorization. No pytest, Docker, API, or live integration checks were run. New skill discovery was not confirmed directly.
 - **Security review and limitations:** No runtime code, database, credentials, or dependencies were changed by this session. The security skill covers the requested attack surfaces and preserves the distinction between localhost development gating and production authentication. Current development endpoints still lack authentication and collection authorization. The codebase map and guide describe implemented behavior separately from planned retrieval, generation, LangGraph, and MCP work.
 - **Next recommended task:** Review the tracked and untracked workflow files and the two pre-existing edits separately. Resolve the pre-existing whitespace issue only under an authorization that allows application-code changes; rerun `git diff --check` afterward. Verify skill discovery in a fresh Codex session if desired. Request separate approval before committing, pushing, or opening a Pull Request; schedule operational credential and backup documentation separately. Do not start Phase 5 without a request.
+
+## 2026-10-29 — PostgreSQL operations documentation
+
+- **Branch and Git status:** `docs/postgres-operations`; documentation changes remain uncommitted and unpushed. No Pull Request, merge, password rotation, backup, restore, Docker-volume operation, or database migration was performed in this session.
+- **Completed:** Expanded `docs/DATABASE_MIGRATIONS.md` with the Compose initialization-versus-stored-role password distinction, interactive `psql \password` rotation guidance, `.env`/`DATABASE_URL` synchronization and URI encoding, private `pg_dump -Fc` archive examples, `pg_restore -l` inspection, isolated test-restore advice, explicit Phase 4 migration/adoption sequencing, and read-only troubleshooting. Preserved the retention and deletion policy. Updated `docs/DEVELOPER_GUIDE.md` to point to the completed operations guide. The last user-reported local database status is `unversioned Phase 4 schema`; it was not rechecked.
+- **Verification:** Compared documented commands and outputs with `src/rag_ai/storage/__main__.py`, `migrate.py`, and `compose.yaml`; checked the documented CLI choices and service name statically. `bash -n` accepted the Linux/macOS backup example. Ten local documentation links resolved. `git diff --check` passed before this log entry. A targeted scan found no credential or password-bearing URI patterns in the changed guide files. No pytest, Docker, PostgreSQL, PowerShell, backup, or restore command was executed; the platform examples remain untested at runtime.
+- **Security review and remaining issues:** Passwords are entered interactively rather than placed in shell arguments. The guide warns against volume deletion, stdout/stderr mixing in archives, unverified backups, active-database test restores, and unauthorized state-changing migration commands. A listable archive is not a verified recovery. Separate operational authorization, an actual protected backup, isolated restore test, and approved legacy adoption remain pending.
+- **Next recommended task:** Review `git diff --check`, `git status --short`, and the three documentation diffs. If the guidance is accepted, request separate authorization before committing or pushing. Any actual password rotation, backup/restore, or legacy-schema adoption requires its own operational approval; do not start Phase 5 as part of this documentation task.
+
+
+## 2026-10-29 — PostgreSQL Legacy Schema Adoption
+
+- **Branch:** `docs/postgres-operations`.
+- **Session summary:** Successfully adopted the existing unversioned Phase 4 PostgreSQL schema into RAG-AI's versioned migration system.
+- **Completed:** Executed the existing migration CLI to inspect the database, adopt the validated legacy schema as version 1, run the upgrade command, and verify the resulting schema version. No application-code or migration-SQL changes were required.
+- **Commands and verified results:**
+  ```text
+  $ python -m rag_ai.storage status
+  unversioned Phase 4 schema
+
+  $ python -m rag_ai.storage adopt-legacy
+  Adopted legacy schema as version 1.
+
+  $ python -m rag_ai.storage upgrade
+  Schema at version 1.
+
+  $ python -m rag_ai.storage status
+  version 1
+  ```
+- **Verification:** All four commands completed successfully. The final database status confirms schema version 1, corresponding to `0001_initial.sql`. Document counts, embeddings, and backup restorability were not independently verified during this interaction.
+- **Data preservation:** `adopt-legacy` validates the existing Phase 4 schema and registers its migration history without intentionally rewriting the existing document, chunk, or embedding records. No independent before-and-after data-integrity comparison was reported.
+- **Security and operational considerations:** No password rotation was reported. Backup creation and restore testing were not confirmed. The database remains a local development environment; existing development endpoints are not production-authenticated.
+- **Remaining work:** Confirm that a protected database backup exists, verify recovery using an isolated test database when appropriate, and complete the PostgreSQL operations documentation PR.
+- **Next session:** Review the updated documentation and session log, verify the Git diff, and request separate authorization before committing, pushing, or merging. Phase 5 semantic retrieval remains unstarted.
