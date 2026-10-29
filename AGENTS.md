@@ -8,6 +8,18 @@
 - Add tests for observable behavior. Run `python -m pytest` before reporting a backend change. Keep the health endpoint a liveness check unless a separate readiness endpoint is designed.
 - Review `git diff` and `git status` before committing. Preserve `LICENSE`.
 
+## Task scope and progressive disclosure
+
+- Locate relevant paths and interfaces first, then read targeted code, tests, and documentation. Expand exploration only when needed; avoid repository-wide reads, excessive logs, and repeated test runs. Summarize findings concisely. Use repository-local Agent Skills in `.agents/skills/` when their specific activation conditions apply; `AGENTS.md` remains authoritative.
+- Before substantial multi-file implementation, write a concise 3–5 step `plan.md` covering affected files, downstream effects, verification, and risks, then request implementation approval. Existing explicit approval for that scope satisfies this gate; do not ask again.
+- When reviewing backend changes, trace relevant effects across FastAPI routes, Pydantic models, PostgreSQL storage, and provider integrations. Consider Windows, macOS, and Linux behavior and use existing tests and tooling before proposing dependencies.
+
+## Learning-first feature development
+
+For each new feature or phase, work through **brainstorm → learn → explore → design → approve → implement → review and learn**. Discuss requirements, alternatives, trade-offs, and learning goals; explain the relevant concepts; trace the existing code and data flow; then propose the architecture and concise plan. Brainstorming alone does not authorize implementation. Obtain explicit approval before substantial implementation, except where the scope was already approved. Commit, push, and merge still require separate explicit authorization.
+
+Implement approved behavior with relevant tests, documentation, and security checks. At review, explain what changed, why the design was chosen, how it works, how to test and debug it, and what remains limited. For significant features, write concise developer-facing learning documentation using understandable technical language rather than lengthy tutorials. Record significant, evidence-based architectural decisions as concise entries in `docs/ARCHITECTURE_DECISIONS.md`; avoid speculative architecture. Skills complement these rules without replacing them.
+
 ## Git branching strategy
 
 - `main` represents stable, tested code. Develop every new feature on a dedicated branch; never implement a new feature directly on `main`.

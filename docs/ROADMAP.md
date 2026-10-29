@@ -29,3 +29,31 @@ This roadmap records the approved development direction. Phases 1–4 are implem
 - Add automated Windows, macOS, and Linux test coverage as integrations arrive. Keep development fixtures separate from evaluation datasets and record platform-specific limitations rather than assuming parity.
 
 The next planned implementation milestone is Phase 5, only when separately requested. Phase 4 stores vectors but has no semantic retrieval, answer generation, multimodal processing, agents, MCP integration, or frontend. Public indexing remains blocked by missing authentication, authorization, ingress limits, and stronger resource isolation.
+
+
+## Application Flow
+                   User uploads PDF
+                          │
+                          ▼
+              FastAPI document endpoint
+                api/documents.py
+                          │
+                          ▼
+               Parse and validate
+               documents/parser.py
+                          │
+                          ▼
+                 Split into chunks
+               documents/chunker.py
+                          │
+                          ▼
+                 Index document
+               documents/indexer.py
+                          │
+                          ▼
+              Local Ollama embeddings
+               embeddings/ollama.py
+                          │
+                          ▼
+               PostgreSQL + pgvector
+                storage/postgres.py
