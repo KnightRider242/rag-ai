@@ -1,6 +1,6 @@
 # RAG-AI
 
-RAG-AI is an enterprise knowledge assistant under development. This repository provides a Python API, document extraction and chunking, and development-only local indexing with Ollama embeddings in PostgreSQL/pgvector. Retrieval, answer generation, and the React client are planned for later milestones.
+RAG-AI is an enterprise knowledge assistant under development. This repository provides a Python API, document extraction and chunking, development-only local indexing with Ollama embeddings in PostgreSQL/pgvector, and development-only semantic retrieval. Answer generation and the React client are planned for later milestones.
 
 ## Requirements
 
@@ -106,9 +106,32 @@ curl -F 'file=@notes.md;type=text/markdown' \
   http://127.0.0.1:8000/collections/00000000-0000-4000-8000-000000000001/documents/index
 ```
 
-The endpoint reuses Phase 2 validation and Phase 3 chunking, obtains local embeddings in batches of at most 16 chunks, and atomically stores the original bytes, document metadata, chunks, vectors, model name, Ollama model digest, and **actual returned vector dimensions**. The initial local `embeddinggemma:300m` test returned 768 dimensions; other models are not assumed to use 768. After the first batch reveals the actual dimension, the application checks `chunk count × dimensions` before generating the remaining embeddings. Batches are staged in a connection-local PostgreSQL temporary table and the final document replacement uses one short transaction. A failed batch or final write leaves the prior permanent index unchanged. This keeps Python vector memory bounded, at the cost of holding a database connection while Ollama processes the document. A collection cannot mix dimensions or digests under the same model name. Re-indexing the same document replaces its chunks and vectors in that collection. The response contains identifiers, chunk count, and model metadata, without document text or vectors. Semantic retrieval and citations are not implemented.
+The endpoint reuses Phase 2 validation and Phase 3 chunking, obtains local embeddings in batches of at most 16 chunks, and atomically stores the original bytes, document metadata, chunks, vectors, model name, Ollama model digest, and **actual returned vector dimensions**. The initial local `embeddinggemma:300m` test returned 768 dimensions; other models are not assumed to use 768. After the first batch reveals the actual dimension, the application checks `chunk count × dimensions` before generating the remaining embeddings. Batches are staged in a connection-local PostgreSQL temporary table and the final document replacement uses one short transaction. A failed batch or final write leaves the prior permanent index unchanged. This keeps Python vector memory bounded, at the cost of holding a database connection while Ollama processes the document. A collection cannot mix dimensions or digests under the same model name. Re-indexing the same document replaces its chunks and vectors in that collection. The response contains identifiers, chunk count, and model metadata, without document text or vectors.
 
 `MAX_INDEX_CHUNKS_PER_DOCUMENT` defaults to 500 (maximum 5000), `MAX_EMBEDDING_DIMENSIONS` defaults to 4096 (maximum 16,000), and `MAX_EMBEDDING_ELEMENTS` defaults to 1,000,000 (maximum 2,000,000). Exceeding the element budget returns HTTP 413 after the first dimension probe. These settings, the existing upload/extraction/chunk limits, and bounded Ollama responses constrain work. Original bytes, chunks, and vectors remain until explicitly deleted; there is no automatic expiry. The storage layer provides collection-scoped transactional document deletion, with no unauthenticated deletion route. See the [lifecycle policy and migration commands](docs/DATABASE_MIGRATIONS.md). Narrower database privileges, backup retention controls, and authenticated collection access are still required before deployment.
+
+## Local semantic retrieval
+
+Phase 5 adds `POST /collections/{collection_id}/search`. It is **disabled by default** and registered only with `APP_ENV=development` and `ENABLE_DOCUMENT_RETRIEVAL_ENDPOINT=true`. Production configuration that enables the route is rejected. The retrieval flag is separate from the parse and index flags; the route reads indexed chunks but does not modify them. Use it only on a trusted machine with Uvicorn bound to `127.0.0.1`; it has **no authentication or collection authorization** and must not be exposed publicly.
+
+```dotenv
+APP_ENV=development
+ENABLE_DOCUMENT_RETRIEVAL_ENDPOINT=true
+OLLAMA_BASE_URL=http://127.0.0.1:11434
+EMBEDDING_MODEL=embeddinggemma:300m
+```
+
+After indexing synthetic or authorized documents into a collection, submit a JSON query:
+
+```bash
+curl -H 'Content-Type: application/json' \
+  -d '{"query":"How does battery cooling work?","top_k":5}' \
+  http://127.0.0.1:8000/collections/00000000-0000-4000-8000-000000000001/search
+```
+
+The response contains `collection_id` and ranked `results`. Each result includes `document_id`, `chunk_id`, `chunk_index`, `filename`, `file_type`, `page_number` (null for TXT/MD), `text`, and `cosine_distance` (smaller means closer). No raw vectors are returned. `top_k` defaults to 5 and is limited to 1–20; the trimmed query must contain 1–2000 characters. Invalid input returns 422; incompatible model name, Ollama digest, or dimensions returns 409; Ollama failures return 502; unavailable or unconfigured PostgreSQL returns 503. A collection without indexed embeddings returns an empty list after query embedding. Model identity and dimensions are checked against actual indexed embeddings. Exact pgvector cosine search excludes zero vectors and filters collection/model/digest/dimensions before ranking; ties use stable IDs. The server never falls back to a cloud provider. A LangChain Core `BaseRetriever` adapter delegates to the same retrieval service, with source metadata in each `Document`; no answer chain is implemented.
+
+Synthetic retrieval cases in `tests/evaluation/semantic_cases.json` are separate from ordinary examples. Nine one-chunk documents include related topics and distractors; four questions each name one relevant source before retrieval. The test maps those sources to deterministic chunk IDs during indexing, then uses actual ranked IDs to measure Recall@1, Recall@3, Hit@1, Hit@3, and MRR@3. Recall@K is the fraction of expected IDs in the first K results; Hit@K records any hit; MRR@3 averages the inverse rank of the first hit among the first three results, or zero if absent. Preset test expectations require at least three first-rank hits and all four within the top three. On the local `embeddinggemma:300m` run of 2026-10-29, all five measured metrics were **1.0** for this synthetic dataset. This small check is not a general relevance guarantee; results may vary with model revision. There is no similarity cutoff. Collection UUID filtering does not authorize access, and the route must remain localhost-only until real caller and document authorization exists.
 
 ## Tests
 
@@ -118,15 +141,17 @@ python -m pytest
 
 Tests exercise parsing and chunking through the HTTP API without requiring a running database. `/health` reports API process liveness; it does not assert database readiness.
 
-The default suite skips the real database/Ollama tests. To run them, start the Compose database, set `RAG_AI_TEST_DATABASE_URL` to a **dedicated local test database URL** with the `vector` extension installed and schema-creation permission, and set `RAG_AI_RUN_OLLAMA_TESTS=1` with the model available locally. Then run `python -m pytest -q`. Tests use synthetic documents in disposable, randomly named schemas and remove those schemas afterward. The local end-to-end check verifies parse → chunk → embed → pgvector persistence and the measured 768 dimensions. Never use a database containing real documents for destructive integration tests. Windows and macOS runtime checks remain outstanding.
+The default suite skips the real database/Ollama tests. To run PostgreSQL integration tests, start the Compose database and set `RAG_AI_TEST_DATABASE_URL` to a **dedicated local test database URL** with the `vector` extension installed and schema-creation permission. Set `RAG_AI_RUN_OLLAMA_TESTS=1` as well to run local Ollama indexing and semantic evaluation with `embeddinggemma:300m`. Then run `python -m pytest -q`. Tests use synthetic documents in disposable, randomly named schemas and remove those schemas afterward. Never use a database containing real documents for destructive integration tests. Windows and macOS runtime checks remain outstanding.
+
+On 2026-10-29, the expanded evaluation passed 5 tests and the full suite with dedicated PostgreSQL and local Ollama enabled passed **168 tests, 0 failed, 0 skipped**. The previous three-case evaluation and complete suite had passed 3 and 166 tests respectively (user-reported historical runs). These runs emitted 13 Python 3.14 deprecation warnings from the installed `langsmith` dependency. One older orphan `rag_ai_test_*` schema remains in the dedicated test database; it was not deleted. Passing tests do not establish production authorization or retrieval quality beyond the synthetic cases.
 
 ## Configuration
 
-The application reads environment variables and optionally `.env` from the working directory. `APP_NAME` changes the OpenAPI title. `APP_ENV`, `ENABLE_DOCUMENT_PARSE_ENDPOINT`, and `ENABLE_DOCUMENT_INDEX_ENDPOINT` control development route registration. Upload, extraction, chunking, and embedding limits are described above and in `.env.example`. `DATABASE_URL` is used by the development indexing path and explicit migration commands. Docker Compose reads `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, and optionally `POSTGRES_PORT` from `.env`. Use a managed secret store for deployed credentials; do not commit credentials or environment files.
+The application reads environment variables and optionally `.env` from the working directory. `APP_NAME` changes the OpenAPI title. `APP_ENV`, `ENABLE_DOCUMENT_PARSE_ENDPOINT`, `ENABLE_DOCUMENT_INDEX_ENDPOINT`, and `ENABLE_DOCUMENT_RETRIEVAL_ENDPOINT` control development route registration. Upload, extraction, chunking, and embedding limits are described above and in `.env.example`. `DATABASE_URL` is used by development indexing/retrieval and explicit migration commands. Docker Compose reads `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, and optionally `POSTGRES_PORT` from `.env`. Use a managed secret store for deployed credentials; do not commit credentials or environment files.
 
 ## Roadmap
 
-Phases 1–4 provide the backend foundation, document ingestion, chunking, and local Ollama/pgvector indexing. Local inference can use a CPU; [GPU acceleration](https://docs.ollama.com/gpu) depends on the host and Ollama support. Later phases plan semantic retrieval, cited text RAG, explicit cloud-provider choice, multimodal evidence, LangGraph workflows, MCP tools, a React frontend, and deployment hardening. These later capabilities are not implemented. See the [full roadmap](docs/ROADMAP.md) and [architecture decisions](docs/ARCHITECTURE_DECISIONS.md).
+Phases 1–5 provide the backend foundation, ingestion, chunking, local Ollama/pgvector indexing, and semantic retrieval/evaluation for trusted local development. Local inference can use a CPU; [GPU acceleration](https://docs.ollama.com/gpu) depends on the host and Ollama support. Later phases plan cited text RAG, explicit cloud-provider choice, multimodal evidence, LangGraph workflows, MCP tools, a React frontend, and deployment hardening. These later capabilities are not implemented. See the [full roadmap](docs/ROADMAP.md) and [architecture decisions](docs/ARCHITECTURE_DECISIONS.md).
 
 ## Layout
 
@@ -136,6 +161,7 @@ src/rag_ai/core/      Typed application configuration
 src/rag_ai/documents/ Validated extraction and deterministic chunking
 src/rag_ai/embeddings/ Local Ollama provider and embedding boundary
 src/rag_ai/storage/   Collection-scoped PostgreSQL/pgvector indexing
+src/rag_ai/retrieval/ Typed search, LangChain adapter, and evaluation metrics
 src/rag_ai/main.py    FastAPI application factory and entry point
 tests/               API tests
 docker/postgres/      Database initialization script
@@ -147,8 +173,8 @@ The repository retains its [Apache 2.0 license](LICENSE).
 ## Acknowledgements
 
 - [FastAPI](https://fastapi.tiangolo.com/) (MIT) powers the backend API; [PyMuPDF](https://pymupdf.readthedocs.io/) (AGPL or commercial license) extracts PDF text.
-- [LangChain text splitters](https://github.com/langchain-ai/langchain/tree/master/libs/text-splitters) (MIT) provides `RecursiveCharacterTextSplitter` for chunking. Other LangChain features are not implemented.
-- [PostgreSQL](https://www.postgresql.org/) and [pgvector](https://github.com/pgvector/pgvector) (PostgreSQL License) store local document vectors. Vector search is planned, not implemented.
+- [LangChain text splitters](https://github.com/langchain-ai/langchain/tree/master/libs/text-splitters) (MIT) provides `RecursiveCharacterTextSplitter` for chunking; [LangChain Core](https://python.langchain.com/docs/concepts/retrievers/) (MIT) supplies the retriever and document interfaces.
+- [PostgreSQL](https://www.postgresql.org/) and [pgvector](https://github.com/pgvector/pgvector) (PostgreSQL License) store and search local document vectors.
 - [Ollama](https://ollama.com/) provides local embeddings for Phase 4; [Psycopg](https://www.psycopg.org/psycopg3/) connects the Python backend to PostgreSQL.
 - [Python](https://www.python.org/) (PSF License) and [Pydantic](https://docs.pydantic.dev/) (MIT) support the backend and typed configuration.
 - [OpenAI Codex](https://openai.com/codex/) assisted with development and review. This acknowledgement does not imply endorsement by OpenAI or any other project listed here.

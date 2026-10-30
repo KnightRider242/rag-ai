@@ -2,9 +2,9 @@
 
 These decisions describe the approved direction as of 2026-10-28. They guide future work; they do not imply that planned integrations exist. Revisit a decision on its feature branch if implementation evidence warrants a change, and record the reason.
 
-## Current baseline (Phases 1–4)
+## Current baseline (Phases 1–5 feature branch)
 
-The FastAPI backend exposes `/health` and, with explicit development configuration, `/documents/parse`, `/documents/chunk`, and `/collections/{collection_id}/documents/index`. PDF, TXT, and Markdown extraction, LangChain text splitting, and local Ollama embeddings persisted in PostgreSQL/pgvector are implemented. The indexing route stores original bytes, chunks, and vectors. It has no authentication or collection authorization and is restricted to trusted localhost development. There is no retrieval, answer generation, cloud provider, vision model, agent, MCP tool, or frontend yet.
+The FastAPI backend exposes `/health` and, with explicit development configuration, `/documents/parse`, `/documents/chunk`, `/collections/{collection_id}/documents/index`, and `/collections/{collection_id}/search`. PDF, TXT, and Markdown extraction, LangChain text splitting, local Ollama embeddings, PostgreSQL/pgvector persistence, and exact semantic search are implemented on this branch. The indexing route stores original bytes, chunks, and vectors. Development routes have no authentication or collection authorization and are restricted to trusted localhost use. There is no answer generation, cloud provider, vision model, agent, MCP tool, or frontend.
 
 ## AD-01 — Local-first and explicit processing location
 
@@ -28,7 +28,7 @@ The FastAPI backend exposes `/health` and, with explicit development configurati
 
 **Reason:** Collection boundaries prevent accidental cross-tenant access; model metadata prevents silently comparing vectors from incompatible spaces.
 
-**Implementation status:** Phase 4 stores collection-scoped documents, chunks, vectors, model names, Ollama digests, measured dimensions, and chunking configuration. Database keys and foreign keys keep records within a collection. Explicit versioned SQL migrations track the schema; an existing unversioned Phase 4 schema requires verified adoption. Storage-layer document deletion removes a collection's original bytes and derived rows transactionally, with no automatic retention expiry or HTTP deletion route. Authorization and retrieval filters remain planned; a collection UUID and SHA-256 IDs are not access tokens. Re-indexing one document replaces its prior chunks and vectors in that collection.
+**Implementation status:** Phase 4 stores collection-scoped documents, chunks, vectors, model names, Ollama digests, measured dimensions, and chunking configuration. Database keys and foreign keys keep records within a collection. Explicit versioned SQL migrations track the schema; an existing unversioned Phase 4 schema requires verified adoption. Storage-layer document deletion removes a collection's original bytes and derived rows transactionally, with no automatic retention expiry or HTTP deletion route. Phase 5 applies collection/model/digest/dimension filters to exact search. Caller and document authorization remain planned; a collection UUID and SHA-256 IDs are not access tokens. Re-indexing one document replaces its prior chunks and vectors in that collection.
 
 ## AD-04 — Preserve sources and trace citations
 
@@ -44,7 +44,7 @@ The FastAPI backend exposes `/health` and, with explicit development configurati
 
 **Reason:** Separation reduces evaluation leakage; repeated security review catches new trust boundaries as capabilities expand.
 
-**Implementation status:** Synthetic automated tests and branch/reporting rules exist. Evaluation datasets and their governance are planned for Phase 5.
+**Implementation status:** Synthetic automated tests and branch/reporting rules exist. A separate, nine-document and four-question synthetic retrieval evaluation dataset tests first-rank and top-three behavior; it is not a production quality benchmark. Governance for future real datasets remains planned.
 
 ## AD-06 — Incremental branches and deployment boundary
 
@@ -61,3 +61,11 @@ The FastAPI backend exposes `/health` and, with explicit development configurati
 **Reason:** Local development should work across supported operating systems without coupling database deployment to inference hardware. Platform and accelerator differences must be tested rather than assumed.
 
 **Implementation status:** The Python backend uses a configurable loopback Ollama endpoint and the existing Docker Compose pgvector database. The local integration was verified on Nobara Linux 44 with `embeddinggemma:300m` and a 768-dimensional provider response. Windows/macOS runtime behavior, accelerator validation, and cross-platform CI are not yet verified.
+
+## AD-08 — Exact, compatibility-checked retrieval before approximate search
+
+**Decision:** Reuse `EmbeddingProvider` for one locally embedded query and `PostgresIndexStore` for exact pgvector cosine ranking. Check model name, Ollama digest, and measured dimensions against actual indexed embeddings. Use one read-only repeatable-read snapshot for the compatibility check and ranking. Materialize collection-scoped, same-dimension, nonzero vectors and IDs before the cosine operation; fetch text only for the top ranked IDs and break equal-distance ties by stable identifiers. Expose a separately gated development route and a thin LangChain Core adapter over the same service. Evaluate actual ranked chunk IDs with synthetic cases before considering thresholds or approximate indexes.
+
+**Reason:** The existing unbounded-dimension vector column can contain different models and sizes. Filtering before distance evaluation avoids invalid comparisons, while a stable snapshot prevents a concurrent index update from changing compatibility between checks. Reusing the existing provider and store keeps local-only network and collection rules in one place. Exact search is the simplest correctness baseline; no performance evidence yet justifies HNSW or IVFFlat.
+
+**Implementation status:** The Phase 5 feature branch implements the service, store search, API, adapter, and evaluation metrics without a schema migration. Local PostgreSQL retrieval integration passed (7 tests), and the expanded Ollama evaluation ranked all four labeled sources first on 2026-10-29. Human review remains pending. There is no caller/document authorization, public route, answer generation, similarity cutoff, or production retrieval benchmark.

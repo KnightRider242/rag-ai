@@ -1,0 +1,58 @@
+{
+  "documents": [
+    {
+      "id": "battery_cooling",
+      "text": "Liquid coolant flows through battery cold plates and carries cell heat to a radiator. This circuit prevents the battery pack from overheating."
+    },
+    {
+      "id": "cabin_cooling",
+      "text": "The passenger cabin air conditioner cools air before blowing it through dashboard vents. It does not circulate liquid through battery cells."
+    },
+    {
+      "id": "battery_balancing",
+      "text": "The battery controller balances the electrical charge of individual cells to reduce voltage differences. Balancing is unrelated to removing heat."
+    },
+    {
+      "id": "ventilation_filter",
+      "text": "Inspect the incoming ventilation air filter every six months. The filter captures dust before air reaches the passenger compartment."
+    },
+    {
+      "id": "hydraulic_filter",
+      "text": "Replace the hydraulic oil filter after 500 operating hours. It removes metal particles from the lift circuit rather than filtering cabin air."
+    },
+    {
+      "id": "emergency_relay",
+      "text": "Pressing the emergency stop button opens the safety relay, which disconnects electrical power to the drive motor immediately."
+    },
+    {
+      "id": "software_stop",
+      "text": "A normal software stop gradually slows the drive motor while its power relay remains closed. It is not an emergency power disconnection."
+    },
+    {
+      "id": "report_retention",
+      "text": "The data retention policy removes exported reports after 30 days. Audit events are kept for one year."
+    },
+    {
+      "id": "backup_retention",
+      "text": "Database backups are retained for 90 days before removal. This schedule does not apply to exported reports."
+    }
+  ],
+  "questions": [
+    {
+      "query": "Which liquid circuit carries heat away from the battery cells?",
+      "relevant_document_ids": ["battery_cooling"]
+    },
+    {
+      "query": "How frequently should the air intake filter for passengers be checked?",
+      "relevant_document_ids": ["ventilation_filter"]
+    },
+    {
+      "query": "What breaks power to the drive during an emergency shutdown?",
+      "relevant_document_ids": ["emergency_relay"]
+    },
+    {
+      "query": "When does the policy remove generated reports?",
+      "relevant_document_ids": ["report_retention"]
+    }
+  ]
+}

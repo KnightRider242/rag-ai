@@ -1,6 +1,6 @@
 # RAG-AI development roadmap
 
-This roadmap records the approved development direction. Phases 1–4 are implemented for local development; later phases are plans, not current capabilities. Each phase requires its own scoped branch, tests, security review, and documentation before merge. See [architecture decisions](ARCHITECTURE_DECISIONS.md) and the [security test plan](SECURITY_TEST_PLAN.md).
+This roadmap records the approved development direction. Phases 1–4 are implemented for local development; Phase 5 is implemented and locally tested on `feat/semantic-retrieval`, pending final human review. Later phases are plans, not current capabilities. Each phase requires its own scoped branch, tests, security review, and documentation before merge. See [architecture decisions](ARCHITECTURE_DECISIONS.md) and the [security test plan](SECURITY_TEST_PLAN.md).
 
 | Phase | Status | Intended outcome |
 | --- | --- | --- |
@@ -8,7 +8,7 @@ This roadmap records the approved development direction. Phases 1–4 are implem
 | 2. Document ingestion | Complete | Development-only PDF, TXT, and Markdown extraction with metadata and input limits; no persistence. |
 | 3. Document chunking | Complete | Development-only LangChain text splitting with source-page metadata, deterministic IDs, and resource bounds; no persistence. |
 | 4. Local embeddings and pgvector | Complete for local development | Use native local Ollama at a configurable loopback endpoint and store collection-scoped original documents, chunks, vectors, model names, digests, and measured dimensions in PostgreSQL/pgvector via Docker Compose. Explicit versioned migrations and storage-layer document deletion exist; indexing is development-only and has no collection authorization. |
-| 5. Semantic retrieval and evaluation | Planned | Retrieve authorized chunks and measure retrieval quality using a separate evaluation dataset. |
+| 5. Semantic retrieval and evaluation | Implemented and locally verified on feature branch; human review pending | Development-only collection-scoped exact cosine search, model compatibility checks, a LangChain adapter, and a separate synthetic evaluation dataset. Caller/document authorization remains unimplemented. |
 | 6. Local text RAG with citations | Planned | Generate text answers locally from retrieved evidence and cite traceable source locations; handle insufficient evidence explicitly. |
 | 7. Multi-provider LLM and embedding support | Planned | Add independent embedding and LLM interfaces for local Ollama and explicitly authorized cloud AI providers, with explicit local/cloud processing policies. Confidential data must never fall back to a cloud provider automatically. |
 | 8. Multimodal document understanding | Planned | Add an independent vision-language model (VLM) interface; extract and represent multimodal PDFs, images, figures, diagrams, and tables while preserving links to original source files and page or region locations. |
@@ -28,32 +28,40 @@ This roadmap records the approved development direction. Phases 1–4 are implem
 - Add functional and security tests for each new attack surface. Do not treat a completed phase or passing tests as a production security approval.
 - Add automated Windows, macOS, and Linux test coverage as integrations arrive. Keep development fixtures separate from evaluation datasets and record platform-specific limitations rather than assuming parity.
 
-The next planned implementation milestone is Phase 5, only when separately requested. Phase 4 stores vectors but has no semantic retrieval, answer generation, multimodal processing, agents, MCP integration, or frontend. Public indexing remains blocked by missing authentication, authorization, ingress limits, and stronger resource isolation.
+The next planned implementation milestone is Phase 6, only when separately requested after Phase 5 review. Phase 5 searches stored vectors but does not generate answers, support multimodal processing, agents, MCP integration, or a frontend. Public indexing and retrieval remain blocked by missing authentication, authorization, ingress limits, and stronger resource isolation.
 
 
-## Application Flow
-                   User uploads PDF
-                          │
-                          ▼
-              FastAPI document endpoint
-                api/documents.py
-                          │
-                          ▼
-               Parse and validate
-               documents/parser.py
-                          │
-                          ▼
-                 Split into chunks
-               documents/chunker.py
-                          │
-                          ▼
-                 Index document
-               documents/indexer.py
-                          │
-                          ▼
-              Local Ollama embeddings
-               embeddings/ollama.py
-                          │
-                          ▼
-               PostgreSQL + pgvector
-                storage/postgres.py
+## Application flow
+
+```mermaid
+flowchart TB
+    subgraph P4["Document indexing — Phase 4"]
+        direction LR
+        Upload["Upload PDF, TXT, or MD"] --> IndexRoute["FastAPI index endpoint<br/>api/documents.py"]
+        IndexRoute --> Parse["Validate and parse<br/>documents/parser.py"]
+        Parse --> Chunk["LangChain text chunking<br/>documents/chunker.py"]
+        Chunk --> Indexer["Index coordination<br/>documents/indexer.py"]
+        Indexer --> DocEmbed["Local Ollama chunk embeddings<br/>embeddings/ollama.py"]
+        DocEmbed --> Save["PostgresIndexStore.save()"]
+    end
+
+    DB["Shared PostgreSQL + pgvector<br/>storage/postgres.py"]
+
+    subgraph P5["Semantic retrieval — Phase 5"]
+        direction LR
+        Question["Search question"] --> SearchRoute["FastAPI search endpoint<br/>api/retrieval.py"]
+        SearchRoute --> Service["RetrievalService<br/>retrieval/service.py"]
+        Service --> QueryEmbed["Query vector via same Ollama provider<br/>embeddings/ollama.py"]
+        QueryEmbed --> Search["PostgresIndexStore.search()"]
+        Search --> Compatible["Collection + model name,<br/>digest, dimension checks"]
+        Compatible --> Rank["Cosine distance + top K"]
+        Rank --> Chunks["Chunk text + source metadata"]
+        Chunks --> JSON["JSON search response"]
+    end
+
+    Save --> DB
+    DB --> Search
+    Adapter["LangChain BaseRetriever adapter<br/>retrieval/langchain.py"] --> Service
+```
+
+Both routes are for trusted localhost development. Collection filtering and model compatibility protect search correctness; they do not authenticate callers. The LangChain adapter delegates to the same service and does not perform a second vector search. Answer generation remains planned for Phase 6.
