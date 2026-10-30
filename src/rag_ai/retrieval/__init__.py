@@ -1,0 +1,1 @@
+"""Collection-scoped semantic retrieval."""

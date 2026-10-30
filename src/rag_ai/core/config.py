@@ -36,6 +36,7 @@ class Settings(BaseSettings):
     app_env: Literal["development", "test", "production"] = "production"
     enable_document_parse_endpoint: bool = False
     enable_document_index_endpoint: bool = False
+    enable_document_retrieval_endpoint: bool = False
     database_url: SecretStr | None = None
     ollama_base_url: str = "http://127.0.0.1:11434"
     embedding_model: str = "embeddinggemma:300m"
@@ -55,6 +56,8 @@ class Settings(BaseSettings):
             raise ValueError("Document parsing cannot be enabled in production.")
         if self.app_env == "production" and self.enable_document_index_endpoint:
             raise ValueError("Document indexing cannot be enabled in production.")
+        if self.app_env == "production" and self.enable_document_retrieval_endpoint:
+            raise ValueError("Document retrieval cannot be enabled in production.")
         try:
             validate_local_ollama_url(self.ollama_base_url)
         except ValueError as exc:
