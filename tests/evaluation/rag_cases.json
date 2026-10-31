@@ -1,0 +1,36 @@
+{
+  "documents": [
+    {
+      "id": "safety",
+      "text": "Pressing the emergency stop opens the safety relay and immediately disconnects electrical power to the drive motor. A normal software stop slows the motor while the safety relay remains closed, so it does not disconnect motor power."
+    },
+    {
+      "id": "cooling",
+      "text": "The battery coolant pump circulates liquid through cold plates to transfer cell heat to a radiator. Passenger cabin air conditioning uses a separate air circuit."
+    },
+    {
+      "id": "warranty_other_collection",
+      "text": "The synthetic warranty period is two years from purchase. This record belongs only to another collection."
+    }
+  ],
+  "questions": [
+    {
+      "query": "What cuts electrical power to the drive motor during an emergency stop?",
+      "expected_status": "answered",
+      "expected_source": "safety",
+      "required_terms": ["relay"]
+    },
+    {
+      "query": "Does a normal software stop disconnect motor power through the safety relay?",
+      "expected_status": "answered",
+      "expected_source": "safety",
+      "required_terms": ["not"]
+    },
+    {
+      "query": "How long is the warranty period?",
+      "expected_status": "insufficient_evidence",
+      "expected_source": null,
+      "required_terms": []
+    }
+  ]
+}

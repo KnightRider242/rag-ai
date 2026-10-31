@@ -1,6 +1,6 @@
 # Security test plan
 
-This plan covers the current FastAPI health endpoint and development-only parsing, chunking, local indexing, and semantic retrieval. It is a test plan and risk record, not a security audit or claim of production readiness.
+This plan covers the current FastAPI health endpoint and development-only parsing, chunking, local indexing, semantic retrieval, and local cited answers. It is a test plan and risk record, not a security audit or claim of production readiness.
 
 ## Threat model and protected assets
 
@@ -16,7 +16,7 @@ This plan covers the current FastAPI health endpoint and development-only parsin
 | Local model endpoint redirection or oversized response | Document confidentiality, memory | Provider construction validates loopback HTTP; redirects and proxies are disabled and JSON responses are size-bounded |
 | Accumulated embedding vectors | API memory and database availability | At most 16 vectors per batch; measured dimensions and total element budget checked before remaining batches; temporary database staging and atomic final write |
 | Cross-collection or incompatible retrieval | Stored chunk text and ranking correctness | Parameterized collection-scoped joins; model name/digest/dimension checks against indexed vectors; mixed-dimension candidates filtered before cosine distance |
-| Unauthorized search or prompt injection | Stored document text and future answers | Search route absent by default and in production; localhost-only development use. No authentication or document authorization exists; retrieved text remains untrusted data and is not passed to an LLM |
+| Unauthorized search or prompt injection | Stored document text and generated answers | Search and answer routes absent by default and in production; localhost-only development use. No authentication or document authorization exists. Retrieved text remains untrusted data; answer generation sends bounded evidence only to loopback Ollama. |
 
 Protected assets are uploaded document bytes and extracted text, future tenant documents and access policies, provider credentials, database credentials, and service availability.
 
@@ -53,8 +53,9 @@ The development routes have no authentication or tenant permissions and must be 
 - **Ingestion and chunking (current):** Reject deceptive or malformed input, bound file size and extraction/chunk creation work, preserve PDF page boundaries, treat content as data, avoid filesystem paths and content logging, and return clear errors.
 - **Local indexing (current):** Require separate development opt-in, validate the loopback Ollama URL at the provider boundary, reject redirects, bound chunk and embedding sizes, reject malformed/model-mismatched vectors, store model name/digest/dimensions, stage bounded batches outside the final transaction, use parameterized collection-scoped SQL, and avoid leaking content or connection details in API errors. Real database and Ollama tests use synthetic content and opt-in environment settings.
 - **Local retrieval (current):** Restrict route registration to explicit development opt-in, use the loopback provider, validate the query vector, filter eligible rows in a collection-scoped materialized CTE before cosine ranking, avoid query/content/vector logging, and return controlled errors. The collection filter prevents accidental cross-collection ranking but is not user authorization.
+- **Local cited answers (Phase 6):** Require a separate development flag, validate query and resource limits, use the existing collection-scoped retrieval service, send delimited evidence only to local Ollama, reject redirects and malformed/oversized responses, and resolve citation labels only from retrieved chunks. Accept only completed assistant chat messages with `done_reason=stop`; a missing or unexpected reason fails closed, so Ollama versions omitting that field are incompatible until verified. Negative tests cover invalid citations, prompt-injection text, route gating, provider failures, and abstention. No tools are exposed to the model. Citation validity does not prove claim support, and defensive instructions do not make prompt injection impossible. Public or shared use is blocked until authenticated collection/document authorization, ingress controls, and resource limits at the network boundary exist.
 - **Authorized retrieval (future):** Authenticate callers, authorize every document access, scope database and vector queries by tenant and document permissions, and test cross-tenant denial.
-- **LLM, embedding, and tracing integrations (future):** Require authorization before transferring confidential content, enforce provider data-handling controls, prevent retrieved instructions from gaining system authority, and exclude sensitive content from traces by default.
+- **Cloud LLM, embedding, and tracing integrations (future):** Require authorization before transferring confidential content, enforce provider data-handling controls, prevent retrieved instructions from gaining system authority, and exclude sensitive content from traces by default.
 - **Local/cloud and VLM providers (future):** Test that endpoint configuration and provider selection respect collection policy on Windows, macOS, and Linux; reject unauthorized cloud calls and any automatic cloud fallback, including after a local Ollama failure. Cover visual content and metadata as sensitive data.
 
 ## Known limitations and planned improvements

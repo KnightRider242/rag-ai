@@ -2,9 +2,9 @@
 
 These decisions describe the approved direction as of 2026-10-28. They guide future work; they do not imply that planned integrations exist. Revisit a decision on its feature branch if implementation evidence warrants a change, and record the reason.
 
-## Current baseline (Phases 1–5 feature branch)
+## Current baseline (Phases 1–6 feature branch)
 
-The FastAPI backend exposes `/health` and, with explicit development configuration, `/documents/parse`, `/documents/chunk`, `/collections/{collection_id}/documents/index`, and `/collections/{collection_id}/search`. PDF, TXT, and Markdown extraction, LangChain text splitting, local Ollama embeddings, PostgreSQL/pgvector persistence, and exact semantic search are implemented on this branch. The indexing route stores original bytes, chunks, and vectors. Development routes have no authentication or collection authorization and are restricted to trusted localhost use. There is no answer generation, cloud provider, vision model, agent, MCP tool, or frontend.
+The FastAPI backend exposes `/health` and, with explicit development configuration, `/documents/parse`, `/documents/chunk`, `/collections/{collection_id}/documents/index`, `/collections/{collection_id}/search`, and `/collections/{collection_id}/answer`. PDF, TXT, and Markdown extraction, LangChain text splitting, local Ollama embeddings and generation, PostgreSQL/pgvector persistence, exact semantic search, and single-turn cited answers are implemented on this branch. Development routes have no authentication or collection authorization and are restricted to trusted localhost use. There is no cloud provider, vision model, agent, MCP tool, or frontend.
 
 ## AD-01 — Local-first and explicit processing location
 
@@ -12,7 +12,7 @@ The FastAPI backend exposes `/health` and, with explicit development configurati
 
 **Reason:** Processing location affects confidentiality and data-handling obligations. A local-first path keeps early integration tests independent of external credentials and services.
 
-**Implementation status:** Phase 4 implements a loopback-only Ollama embedding provider with no cloud fallback. General data-classification policy and cloud-provider authorization are not implemented.
+**Implementation status:** Phases 4 and 6 implement loopback-only Ollama embedding and generation providers with no cloud fallback. General data-classification policy and cloud-provider authorization are not implemented.
 
 ## AD-02 — Provider-independent capabilities
 
@@ -20,7 +20,7 @@ The FastAPI backend exposes `/health` and, with explicit development configurati
 
 **Reason:** Provider changes should not alter document ownership, provenance, or authorization behavior.
 
-**Implementation status:** A small embedding provider interface and local Ollama implementation exist. LLM and VLM interfaces remain planned for Phases 7–8.
+**Implementation status:** Small embedding and generation provider interfaces and local Ollama implementations exist. The VLM interface remains planned for Phase 8; multiple provider implementations remain planned for Phase 7.
 
 ## AD-03 — Collection-scoped persistence and vector compatibility
 
@@ -36,7 +36,7 @@ The FastAPI backend exposes `/health` and, with explicit development configurati
 
 **Reason:** Answers need verifiable evidence, and later multimodal features need source provenance.
 
-**Implementation status:** Phase 4 retains original source bytes, filenames, document IDs, chunk IDs, and PDF page numbers in the local database. Citation resolution and visual provenance remain planned for Phases 6, 8, and 9.
+**Implementation status:** Phase 4 retains original source bytes, filenames, document IDs, chunk IDs, and PDF page numbers in the local database. Phase 6 resolves request-local labels to these retrieved source locations. Visual provenance remains planned for Phases 8–9; citation resolution does not establish factual entailment.
 
 ## AD-05 — Separate evaluation data and security gates
 
@@ -68,4 +68,12 @@ The FastAPI backend exposes `/health` and, with explicit development configurati
 
 **Reason:** The existing unbounded-dimension vector column can contain different models and sizes. Filtering before distance evaluation avoids invalid comparisons, while a stable snapshot prevents a concurrent index update from changing compatibility between checks. Reusing the existing provider and store keeps local-only network and collection rules in one place. Exact search is the simplest correctness baseline; no performance evidence yet justifies HNSW or IVFFlat.
 
-**Implementation status:** The Phase 5 feature branch implements the service, store search, API, adapter, and evaluation metrics without a schema migration. Local PostgreSQL retrieval integration passed (7 tests), and the expanded Ollama evaluation ranked all four labeled sources first on 2026-10-29. Human review remains pending. There is no caller/document authorization, public route, answer generation, similarity cutoff, or production retrieval benchmark.
+**Implementation status:** Phase 5 implements the service, store search, API, adapter, and evaluation metrics without a schema migration. Local PostgreSQL retrieval integration passed (7 tests), and the expanded Ollama evaluation ranked all four labeled sources first on 2026-10-29. There is no caller/document authorization, public route, similarity cutoff, or production retrieval benchmark.
+
+## AD-09 — Local structured generation over bounded evidence
+
+**Decision:** Keep generation separate from embedding and retrieval. `RAGService` reuses `RetrievalService`, supplies a bounded, explicitly delimited evidence context to a loopback-only Ollama chat provider, and resolves model-cited request labels against application-owned retrieval results. Use a strict structured answer contract with explicit `answered` and `insufficient_evidence` states. Reject invalid output and unknown citations; abstain without generation when retrieval is empty.
+
+**Reason:** This retains Phase 5 collection/model protections while making prompt size, provider access, citation provenance, and abstention independently testable. A separate generation interface leaves room for later approved provider choices without a speculative routing framework.
+
+**Implementation status:** Phase 6 implements single-turn local Qwen3 generation behind a separate development flag. Citation validation checks references, not whether claims are entailed by evidence. Prompt injection, insufficient evidence, and factual grounding remain model-behavior risks; public access is blocked by missing caller and collection authorization.

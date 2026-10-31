@@ -1,6 +1,6 @@
 # Developer guide: learn the current RAG-AI pipeline
 
-RAG-AI accepts PDF, plain-text, and Markdown uploads for development-only parsing and chunking. With separate development flags, it can embed chunks through **local Ollama**, store them in PostgreSQL/pgvector, and search for relevant chunks. It does not generate answers. Follow the [README](../README.md) for setup and the [codebase map](CODEBASE_MAP.md) for a compact module index.
+RAG-AI accepts PDF, plain-text, and Markdown uploads for development-only parsing and chunking. Separate development flags enable local Ollama indexing in PostgreSQL/pgvector, semantic search, and single-turn cited answers. Follow the [README](../README.md) for setup and the [codebase map](CODEBASE_MAP.md) for a compact module index.
 
 ## Follow one document through the code
 
@@ -12,7 +12,7 @@ RAG-AI accepts PDF, plain-text, and Markdown uploads for development-only parsin
 
 An embedding is a numeric representation of text. A query follows the same local Ollama embedding boundary as indexed chunks; `retrieval/service.py` checks for one finite, nonzero vector and passes its model name, digest, and measured dimensions to `storage/postgres.py`. The store checks compatibility against **actual indexed embeddings** in one read-only snapshot. It then filters candidates by collection, model, revision, dimensions, and nonzero norm before pgvector's cosine-distance operator (`<=>`) ranks them. Smaller distance means closer direction. Exact search has stable ID tie-breaking and returns source metadata without raw vectors.
 
-`api/retrieval.py` exposes this path only with a separate development flag and runs the synchronous provider/database work in a threadpool. A missing collection yields no results; a model, digest, or dimension mismatch yields an explicit 409 response. `retrieval/langchain.py` wraps the same service in LangChain Core's `BaseRetriever`; `invoke(query)` returns `Document` objects with chunk text as `page_content` and source/distance fields as metadata. LangChain supplies **text splitting and this thin retriever interface**. LCEL answer chains, LangGraph agent workflows, and MCP tools are not present. See [roadmap](ROADMAP.md) and [architecture decisions](ARCHITECTURE_DECISIONS.md).
+`api/retrieval.py` exposes this path only with a separate development flag and runs the synchronous provider/database work in a threadpool. A missing collection yields no results; a model, digest, or dimension mismatch yields an explicit 409 response. `retrieval/langchain.py` wraps the same service in LangChain Core's `BaseRetriever`; `invoke(query)` returns `Document` objects with chunk text as `page_content` and source/distance fields as metadata. LangChain supplies **text splitting and this thin retriever interface**. Phase 6 answer generation uses a separate small RAG service, not an LCEL chain. LangGraph agent workflows and MCP tools are not present. See [roadmap](ROADMAP.md) and [architecture decisions](ARCHITECTURE_DECISIONS.md).
 
 For an already constructed local `RetrievalService`, adapter usage is:
 
@@ -24,6 +24,12 @@ documents = retriever.invoke("How does battery cooling work?")
 The caller owns the provider lifetime and must close it after use. The adapter does not select a provider or bypass the store's collection filter.
 
 `retrieval/evaluation.py` scores actual ranked chunk IDs against expected IDs: Recall@K is the fraction of expected IDs retrieved, Hit@K records any hit, and MRR averages the reciprocal rank of the first hit **within the requested top K** (zero when no hit appears). Synthetic cases live separately in `tests/evaluation/semantic_cases.json`: nine one-chunk documents include topic neighbors and misleading shared words, while four paraphrased questions each identify one relevant source. The test obtains expected chunk IDs from those indexed sources before searching. SQL/ranking tests use controlled vectors; the opt-in semantic check measures K=1 and K=3 using local Ollama. The 2026-10-29 run ranked all four sources first (Recall@1, Recall@3, Hit@1, Hit@3, and MRR@3 all 1.0). This is a small regression check, not a production retrieval benchmark or a guarantee for other queries or model revisions.
+
+## Study the Phase 6 answer path
+
+Start at `api/answers.py`: the answer route validates JSON and calls `RAGService.answer()` in a threadpool. `rag/service.py` delegates search to the existing `RetrievalService`; retrieval ends when ranked chunks arrive. `rag/context.py` assigns S1/S2 labels and bounds text without silent truncation. `rag/prompts.py` places it inside a delimited, untrusted evidence section. The separate `GenerationProvider` in `generation/base.py` sends a local Ollama `/api/chat` request through `generation/ollama.py`, with JSON-schema output and resource settings. The provider validates JSON before `RAGService` maps each cited label back to retrieved chunk metadata. A missing result or model abstention returns `insufficient_evidence`; an invented label fails closed. Valid labels prove provenance, not factual support.
+
+For debugging, distinguish retrieval 409 compatibility failures and 503 database failures from generation 502 failures. Check local model availability, then whether the retrieved chunks actually support the question; do not print prompts, document text, or credentials. `tests/test_rag_service.py` exercises citations and abstention; `tests/test_generation.py` covers Ollama response errors; `tests/test_answer_api.py` covers route gating; the opt-in `tests/test_rag_integration.py` indexes synthetic sources and checks end-to-end answers. This is a small rule-based grounding check, not a general factuality guarantee.
 
 ## Navigate, test, and debug
 
