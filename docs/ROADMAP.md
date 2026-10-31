@@ -1,6 +1,6 @@
 # RAG-AI development roadmap
 
-This roadmap records the approved development direction. Phases 1–4 are implemented for local development; Phase 5 is implemented and locally tested on `feat/semantic-retrieval`, pending final human review. Later phases are plans, not current capabilities. Each phase requires its own scoped branch, tests, security review, and documentation before merge. See [architecture decisions](ARCHITECTURE_DECISIONS.md) and the [security test plan](SECURITY_TEST_PLAN.md).
+This roadmap records the approved development direction. Phases 1–5 are merged; Phase 6 is implemented locally on `feat/local-rag-answers` and awaits human review. Later phases are plans, not current capabilities. Each phase requires its own scoped branch, tests, security review, and documentation before merge. See [architecture decisions](ARCHITECTURE_DECISIONS.md) and the [security test plan](SECURITY_TEST_PLAN.md).
 
 | Phase | Status | Intended outcome |
 | --- | --- | --- |
@@ -8,8 +8,8 @@ This roadmap records the approved development direction. Phases 1–4 are implem
 | 2. Document ingestion | Complete | Development-only PDF, TXT, and Markdown extraction with metadata and input limits; no persistence. |
 | 3. Document chunking | Complete | Development-only LangChain text splitting with source-page metadata, deterministic IDs, and resource bounds; no persistence. |
 | 4. Local embeddings and pgvector | Complete for local development | Use native local Ollama at a configurable loopback endpoint and store collection-scoped original documents, chunks, vectors, model names, digests, and measured dimensions in PostgreSQL/pgvector via Docker Compose. Explicit versioned migrations and storage-layer document deletion exist; indexing is development-only and has no collection authorization. |
-| 5. Semantic retrieval and evaluation | Implemented and locally verified on feature branch; human review pending | Development-only collection-scoped exact cosine search, model compatibility checks, a LangChain adapter, and a separate synthetic evaluation dataset. Caller/document authorization remains unimplemented. |
-| 6. Local text RAG with citations | Planned | Generate text answers locally from retrieved evidence and cite traceable source locations; handle insufficient evidence explicitly. |
+| 5. Semantic retrieval and evaluation | Complete for local development | Development-only collection-scoped exact cosine search, model compatibility checks, a LangChain adapter, and a separate synthetic evaluation dataset. Caller/document authorization remains unimplemented. |
+| 6. Local text RAG with citations | Implemented locally; human review pending | Generate text answers locally from retrieved evidence and cite traceable source locations; handle insufficient evidence explicitly. |
 | 7. Multi-provider LLM and embedding support | Planned | Add independent embedding and LLM interfaces for local Ollama and explicitly authorized cloud AI providers, with explicit local/cloud processing policies. Confidential data must never fall back to a cloud provider automatically. |
 | 8. Multimodal document understanding | Planned | Add an independent vision-language model (VLM) interface; extract and represent multimodal PDFs, images, figures, diagrams, and tables while preserving links to original source files and page or region locations. |
 | 9. Multimodal RAG and visual citations | Planned | Retrieve text and visual evidence and return citations that identify the original visual source. |
@@ -28,7 +28,7 @@ This roadmap records the approved development direction. Phases 1–4 are implem
 - Add functional and security tests for each new attack surface. Do not treat a completed phase or passing tests as a production security approval.
 - Add automated Windows, macOS, and Linux test coverage as integrations arrive. Keep development fixtures separate from evaluation datasets and record platform-specific limitations rather than assuming parity.
 
-The next planned implementation milestone is Phase 6, only when separately requested after Phase 5 review. Phase 5 searches stored vectors but does not generate answers, support multimodal processing, agents, MCP integration, or a frontend. Public indexing and retrieval remain blocked by missing authentication, authorization, ingress limits, and stronger resource isolation.
+Phase 6 adds single-turn local answers from retrieved text with application-resolved citations and explicit abstention. Multimodal processing, agents, MCP integration, and a frontend remain planned. Public document access remains blocked by missing authentication, authorization, ingress limits, and stronger resource isolation.
 
 
 ## Application flow
@@ -62,6 +62,20 @@ flowchart TB
     Save --> DB
     DB --> Search
     Adapter["LangChain BaseRetriever adapter<br/>retrieval/langchain.py"] --> Service
+
+    subgraph P6["Cited answers — Phase 6"]
+        direction LR
+        AnswerQuestion["Answer question"] --> AnswerRoute["Development answer route<br/>api/answers.py"]
+        AnswerRoute --> RAG["RAGService<br/>rag/service.py"]
+        Evidence["Retrieved chunks"] --> Context["Bounded context<br/>rag/context.py"]
+        Context --> Gen["Local Ollama chat<br/>generation/ollama.py"]
+        Gen --> Validate["Structured output + citation validation"]
+        Validate --> Answer["Cited answer or abstention"]
+    end
+
+    RAG --> Service
+    Chunks --> Evidence
+    RAG --> Context
 ```
 
-Both routes are for trusted localhost development. Collection filtering and model compatibility protect search correctness; they do not authenticate callers. The LangChain adapter delegates to the same service and does not perform a second vector search. Answer generation remains planned for Phase 6.
+All document routes are for trusted localhost development. Collection filtering and model compatibility protect search correctness; they do not authenticate callers. The LangChain adapter delegates to the same retrieval service. RAGService also reuses that service, then sends bounded evidence to local Ollama and resolves cited labels against retrieved chunks; citation validity alone does not prove factual support.

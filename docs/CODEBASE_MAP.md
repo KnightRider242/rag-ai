@@ -12,6 +12,8 @@ This map describes the implemented Python backend on the current branch. Check t
 | [`src/rag_ai/documents/`](../src/rag_ai/documents/) | `parser.py` validates uploads and extracts text; `chunker.py` uses LangChain's `RecursiveCharacterTextSplitter`; `indexer.py` coordinates bounded embedding batches and storage. |
 | [`src/rag_ai/embeddings/`](../src/rag_ai/embeddings/) | `base.py` defines an `EmbeddingProvider` protocol and batch model; `ollama.py` implements local embeddings through Ollama HTTP. |
 | [`src/rag_ai/retrieval/`](../src/rag_ai/retrieval/) | `service.py` embeds and validates one query, `models.py` defines results, `langchain.py` adapts the service to `BaseRetriever`, and `evaluation.py` scores ranked IDs. |
+| [`src/rag_ai/generation/`](../src/rag_ai/generation/) | Typed structured-output contract and local Ollama `/api/chat` provider. |
+| [`src/rag_ai/rag/`](../src/rag_ai/rag/) | Bounded evidence context, prompt instructions, and single-turn retrieval/generation/citation coordination. |
 | [`src/rag_ai/storage/`](../src/rag_ai/storage/) | `postgres.py` writes collection-scoped records and performs read-only exact cosine search. `migrate.py`, `__main__.py`, and `migrations/0001_initial.sql` provide explicit versioned schema commands. |
 
 ## Implemented indexing flow
@@ -58,6 +60,10 @@ Use `tests/test_health.py` and `tests/test_document_gate.py` for routing and con
 
 The local 2026-10-29 run used the dedicated `rag_ai_retrieval_test` database and `embeddinggemma:300m`: seven retrieval integration tests and the five-test expanded evaluation module passed. The full suite passed 168 tests with no skips. This validates the current Linux setup only; it does not establish cross-platform or production behavior.
 
+## Implemented cited-answer flow
+
+`api/answers.py` runs `RAGService.answer()` in a threadpool and closes both providers. `RAGService` reuses `RetrievalService`; `rag/context.py` assigns request-local labels to ranked chunks and rejects overlong evidence rather than truncating it. `rag/prompts.py` presents untrusted content as delimited evidence. `generation/ollama.py` requests JSON-schema output from local Ollama, validates the returned status and claims, and bounds the response. `RAGService` resolves cited labels to retrieval metadata and rejects unknown labels. Empty retrieval abstains without generation. The application verifies provenance, not entailment. `tests/test_generation.py`, `tests/test_rag_service.py`, `tests/test_answer_api.py`, and opt-in `tests/test_rag_integration.py` cover this flow with synthetic data.
+
 ## Planned, not implemented
 
-Phase 6 answer generation with citations, later cloud providers and multimodal processing, LangGraph workflows, MCP tools, and the React frontend are roadmap items. Search returns source chunks, but does not generate answers. Caller/document authorization is also not implemented.
+Cloud providers and multimodal processing, LangGraph workflows, MCP tools, and the React frontend remain roadmap items. Caller/document authorization is also not implemented.
