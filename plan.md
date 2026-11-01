@@ -20,3 +20,10 @@ Branch `feat/semantic-retrieval` starts from merged `main` at `4521f18`. This im
 2. Add a separate development-only answer route and Pydantic settings for model, output, and context bounds. Use the threadpool for synchronous clients, close providers on every path, and return controlled errors without logging question or evidence text.
 3. Add synthetic unit/API/security tests plus opt-in disposable-schema PostgreSQL/Ollama tests. Verify answer, abstention, invalid citations, provider failures, collection scoping, and source provenance; keep semantic quality checks separate from structural guarantees.
 4. Update README, roadmap flow, codebase map, developer guide, architecture decisions, security plan, environment example, and append the session log. Run targeted then full tests, inspect every tracked/untracked change, check secrets and `git diff --check`, and report measured results and limitations. No Phase 7 work or Git publication.
+
+## Phase 7B OpenAI generation (approved)
+
+1. Keep `RAGService`, retrieval SQL, and citations unchanged. Add one HTTPX Responses API implementation of `GenerationProvider` with a strict root-object wire schema, bounded HTTPS response, and validated completed assistant output; map only `num_predict` to `max_output_tokens`.
+2. Add explicit `ollama|openai` selection and a fail-closed development-only cloud transfer gate in settings and the answer route: separate enable flag, server-owned collection UUID allowlist, supported model, and secret credential. Check permission before retrieval and provider construction; never fall back from Ollama.
+3. Test the OpenAI client with synthetic MockTransport responses and assert unauthorized configurations make zero cloud requests. Preserve local route, citation, and abstention behavior; run focused and full local-only regression tests without a real OpenAI request or database modification.
+4. Update `.env.example`, README, architecture/learning/security docs, and append the session log. Review tracked and untracked files, secrets, platform effects, and `git diff --check`; report exact verification and cloud-data limitations. No dependencies or publication operations.

@@ -135,7 +135,7 @@ Synthetic retrieval cases in `tests/evaluation/semantic_cases.json` are separate
 
 ## Local answers with citations
 
-Phase 6 adds `POST /collections/{collection_id}/answer`, separately disabled by default. Set `APP_ENV=development` and `ENABLE_RAG_ANSWER_ENDPOINT=true` in your private `.env`, with local Ollama running `embeddinggemma:300m` and `qwen3:4b-instruct`. Keep Uvicorn bound to `127.0.0.1` on a trusted machine. Production opt-in is rejected; this route has **no authentication or collection authorization** and must never be publicly exposed.
+Phase 6 adds `POST /collections/{collection_id}/answer`, separately disabled by default. Set `APP_ENV=development` and `ENABLE_RAG_ANSWER_ENDPOINT=true` in your private `.env`. The default `GENERATION_PROVIDER=ollama` uses local `embeddinggemma:300m` for retrieval and `qwen3:4b-instruct` for answers. Keep Uvicorn bound to `127.0.0.1` on a trusted machine. Production opt-in is rejected; this route has **no authentication or collection authorization** and must never be publicly exposed.
 
 ```bash
 ollama pull qwen3:4b-instruct
@@ -147,6 +147,24 @@ curl -H 'Content-Type: application/json' \
 The response has `collection_id`, `status` (`answered` or `insufficient_evidence`), and `claims`. Each answered claim includes text and citations with a request-local source label, document ID, chunk ID, filename, file type, and optional PDF page. No retrieved results cause abstention without calling the generation model; the model can also abstain when evidence is insufficient. Unknown citations and malformed output fail closed with HTTP 502. Compatibility conflicts return 409, oversized evidence 413, and database unavailability 503. The server bounds `top_k` to 1–5, query length to 1000 characters, each supplied chunk to 1200 characters, total evidence to 4000 characters, claims to five, and the Ollama response to 32 KiB by default. Character bounds do not prove token fit. Citation checks establish provenance, **not factual support**; semantic retrieval does not guarantee relevant evidence.
 
 `GENERATION_MODEL`, `GENERATION_NUM_CTX`, `GENERATION_NUM_PREDICT`, `GENERATION_TEMPERATURE`, `GENERATION_MAX_RESPONSE_BYTES`, `RAG_MAX_CHUNKS`, `RAG_MAX_CHUNK_CHARACTERS`, and `RAG_MAX_CONTEXT_CHARACTERS` are server settings in `.env.example`. Generation uses local Ollama `/api/chat` with JSON-schema output. There is no cloud fallback, tools, streaming, conversation history, or LangChain answer chain.
+
+### Optional OpenAI generation (Phase 7B feature branch)
+
+OpenAI generation is available only through explicit trusted-localhost development configuration. **No live OpenAI request was made while implementing this integration.** Local Ollama remains the default and still embeds every query. For a synthetic or otherwise explicitly authorized collection, set these values in the private, Git-ignored `.env` file or a secret store:
+
+```dotenv
+APP_ENV=development
+ENABLE_RAG_ANSWER_ENDPOINT=true
+GENERATION_PROVIDER=openai
+ENABLE_CLOUD_GENERATION=true
+CLOUD_GENERATION_COLLECTION_IDS=["00000000-0000-4000-8000-000000000001"]
+OPENAI_GENERATION_MODEL=gpt-6-luna
+OPENAI_API_KEY=
+```
+
+Supply the credential privately; the blank value is only a placeholder. `CLOUD_GENERATION_COLLECTION_IDS` is a JSON array of server-approved UUIDs. The endpoint checks its collection UUID against this allowlist **before retrieval or provider construction**. A configured key alone never enables cloud transfer, and an Ollama failure never triggers an OpenAI fallback. Missing permission returns 403; missing required credentials or unsupported model configuration is rejected. The allowlist is a single-developer transfer control, **not authentication or multi-user authorization**. Do not expose the route on a shared or public interface.
+
+Only the bounded question and retrieved evidence context are sent to OpenAI through the fixed HTTPS Responses API; the context currently includes source labels, chunk text, filenames, and page numbers. Original document bytes, raw vectors, and the rest of the collection are not sent. The request has no tools or streaming, uses strict structured output and `store: false`, and maps `GENERATION_NUM_PREDICT` to `max_output_tokens`; Ollama's `num_ctx` and `temperature` are not forwarded. `store: false` disables stored response state for API retrieval, but does **not** by itself eliminate [abuse-monitoring retention or other provider data handling](https://developers.openai.com/api/docs/guides/your-data). Review those controls before approving confidential content. Refusals, incomplete responses, invalid JSON, and ambiguous output become controlled provider errors rather than evidence-based abstentions. The existing application citation validator resolves labels for either provider; it does not prove factual support.
 
 ## Tests
 
@@ -160,13 +178,15 @@ The default suite skips the real database/Ollama tests. To run PostgreSQL integr
 
 On 2026-10-29, the expanded evaluation passed 5 tests and the full suite with dedicated PostgreSQL and local Ollama enabled passed **168 tests, 0 failed, 0 skipped**. The previous three-case evaluation and complete suite had passed 3 and 166 tests respectively (user-reported historical runs). These runs emitted 13 Python 3.14 deprecation warnings from the installed `langsmith` dependency. One older orphan `rag_ai_test_*` schema remains in the dedicated test database; it was not deleted. Passing tests do not establish production authorization or retrieval quality beyond the synthetic cases.
 
+For Phase 7B on 2026-10-31, focused mocked provider/answer tests passed **97** tests. The complete default suite passed **242**, skipped **24** opt-in live database/Ollama tests, and emitted **13** LangSmith Python 3.14 deprecation warnings. With the dedicated local test database and Ollama enabled, the complete suite passed **266** tests, with **0 failed**, **0 skipped**, and **13 warnings**. OpenAI tests used HTTPX MockTransport; no real OpenAI API call or cloud quality evaluation was performed.
+
 ## Configuration
 
 The application reads environment variables and optionally `.env` from the working directory. `APP_NAME` changes the OpenAPI title. `APP_ENV`, `ENABLE_DOCUMENT_PARSE_ENDPOINT`, `ENABLE_DOCUMENT_INDEX_ENDPOINT`, `ENABLE_DOCUMENT_RETRIEVAL_ENDPOINT`, and `ENABLE_RAG_ANSWER_ENDPOINT` control development route registration. Upload, extraction, chunking, embedding, and generation limits are described above and in `.env.example`. `DATABASE_URL` is used by development indexing/retrieval/answers and explicit migration commands. Docker Compose reads `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, and optionally `POSTGRES_PORT` from `.env`. Use a managed secret store for deployed credentials; do not commit credentials or environment files.
 
 ## Roadmap
 
-Phases 1–5 provide the backend foundation, ingestion, chunking, local Ollama/pgvector indexing, and semantic retrieval/evaluation for trusted local development. Phase 6 adds local cited answers on this feature branch, pending human review. Local inference can use a CPU; [GPU acceleration](https://docs.ollama.com/gpu) depends on the host and Ollama support. Later phases plan explicit cloud-provider choice, multimodal evidence, LangGraph workflows, MCP tools, a React frontend, and deployment hardening. These later capabilities are not implemented. See the [full roadmap](docs/ROADMAP.md) and [architecture decisions](docs/ARCHITECTURE_DECISIONS.md).
+Phases 1–6, including local cited answers, are merged. Phase 7B adds an opt-in OpenAI generation provider on this feature branch, pending review. Local inference can use a CPU; [GPU acceleration](https://docs.ollama.com/gpu) depends on the host and Ollama support. Further provider integrations, cloud embeddings, multimodal evidence, LangGraph workflows, MCP tools, a React frontend, and deployment hardening remain planned. See the [full roadmap](docs/ROADMAP.md) and [architecture decisions](docs/ARCHITECTURE_DECISIONS.md).
 
 ## Layout
 
@@ -177,7 +197,7 @@ src/rag_ai/documents/ Validated extraction and deterministic chunking
 src/rag_ai/embeddings/ Local Ollama provider and embedding boundary
 src/rag_ai/storage/   Collection-scoped PostgreSQL/pgvector indexing
 src/rag_ai/retrieval/ Typed search, LangChain adapter, and evaluation metrics
-src/rag_ai/generation/ Local Ollama structured generation boundary
+src/rag_ai/generation/ Structured local and opt-in OpenAI generation providers
 src/rag_ai/rag/       Bounded context, prompts, and citation resolution
 src/rag_ai/main.py    FastAPI application factory and entry point
 tests/               API tests

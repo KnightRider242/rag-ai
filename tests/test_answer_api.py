@@ -1,6 +1,7 @@
 """Development answer-route gating, contracts, and controlled failures."""
 
 import asyncio
+import json
 import logging
 from uuid import uuid4
 
@@ -11,6 +12,7 @@ from pydantic import ValidationError
 from rag_ai.core.config import Settings
 from rag_ai.embeddings.base import EmbeddingBatch, EmbeddingError
 from rag_ai.generation.base import GeneratedAnswer, GenerationError
+from rag_ai.generation.openai import OpenAIGenerationProvider
 from rag_ai.main import create_app
 from rag_ai.retrieval.models import RetrievedChunk
 from rag_ai.storage.postgres import ModelNameMismatch, StorageError
@@ -191,3 +193,156 @@ def test_answer_route_controls_errors_and_closes_clients(
     assert "private synthetic" not in response.text
     assert "private synthetic" not in caplog.text
     assert embedding.closed and generation.closed
+
+
+def test_local_generation_ignores_present_cloud_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    embedding, generation, store = FakeEmbedding(), FakeGeneration(), FakeStore()
+    _patch(monkeypatch, embedding, generation, store)
+    cloud_calls = []
+    monkeypatch.setattr("rag_ai.api.answers.OpenAIGenerationProvider",
+                        lambda **kwargs: cloud_calls.append(kwargs))
+    response = _post(_settings(openai_api_key="synthetic-test-key"), uuid4(), {"query": "Local?"})
+    assert response.status_code == 200
+    assert generation.calls == 1 and cloud_calls == []
+
+
+@pytest.mark.parametrize("enabled,allowlisted", [(False, True), (True, False)])
+def test_cloud_denied_before_retrieval_or_outbound_request(
+    monkeypatch: pytest.MonkeyPatch, enabled: bool, allowlisted: bool,
+) -> None:
+    collection_id = uuid4()
+    attempted = []
+    monkeypatch.setattr("rag_ai.api.answers.OllamaEmbeddingProvider",
+                        lambda **kwargs: attempted.append("embedding"))
+    monkeypatch.setattr("rag_ai.api.answers.OpenAIGenerationProvider",
+                        lambda **kwargs: attempted.append("cloud"))
+    settings = _settings(
+        generation_provider="openai", enable_cloud_generation=enabled,
+        cloud_generation_collection_ids=[collection_id] if allowlisted else [],
+        openai_api_key="synthetic-test-key",
+    )
+    response = _post(settings, collection_id, {"query": "Synthetic?"})
+    assert response.status_code == 403
+    assert response.json()["detail"]["code"] == "cloud_generation_forbidden"
+    assert attempted == []
+
+
+def test_authorized_cloud_generation_uses_existing_citations(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    collection_id = uuid4()
+    requests: list[httpx.Request] = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(200, json={
+            "object": "response", "status": "completed", "model": "gpt-6-luna",
+            "output": [{"type": "message", "status": "completed", "role": "assistant", "content": [
+                {"type": "output_text", "text": json.dumps({
+                    "status": "answered", "claims": [{"text": "The relay cuts power.",
+                                                    "source_ids": ["S1"]}],
+                })},
+            ]}],
+        })
+
+    embedding, store = FakeEmbedding(), FakeStore()
+    monkeypatch.setattr("rag_ai.api.answers.OllamaEmbeddingProvider", lambda **kwargs: embedding)
+    monkeypatch.setattr("rag_ai.api.answers.PostgresIndexStore", lambda dsn: store)
+    cloud: list[OpenAIGenerationProvider] = []
+
+    def create_cloud(**kwargs) -> OpenAIGenerationProvider:
+        provider = OpenAIGenerationProvider(transport=httpx.MockTransport(handle), **kwargs)
+        cloud.append(provider)
+        return provider
+
+    monkeypatch.setattr("rag_ai.api.answers.OpenAIGenerationProvider", create_cloud)
+    settings = _settings(
+        generation_provider="openai", enable_cloud_generation=True,
+        cloud_generation_collection_ids=[collection_id], openai_api_key="synthetic-test-key",
+    )
+    response = _post(settings, collection_id, {"query": "What cuts power?"})
+    assert response.status_code == 200
+    assert response.json()["claims"][0]["citations"][0]["chunk_id"] == "chunk-1"
+    assert store.calls[0]["collection_id"] == collection_id
+    assert len(requests) == 1 and cloud[0]._client.is_closed and embedding.closed
+
+
+def test_cloud_response_abstention_preserved(monkeypatch: pytest.MonkeyPatch) -> None:
+    collection_id = uuid4()
+    embedding, generation, store = FakeEmbedding(), FakeGeneration(GeneratedAnswer.model_validate({
+        "status": "insufficient_evidence", "claims": [],
+    })), FakeStore()
+    monkeypatch.setattr("rag_ai.api.answers.OllamaEmbeddingProvider", lambda **kwargs: embedding)
+    monkeypatch.setattr("rag_ai.api.answers.OpenAIGenerationProvider", lambda **kwargs: generation)
+    monkeypatch.setattr("rag_ai.api.answers.PostgresIndexStore", lambda dsn: store)
+    response = _post(_settings(
+        generation_provider="openai", enable_cloud_generation=True,
+        cloud_generation_collection_ids=[collection_id], openai_api_key="synthetic-test-key",
+    ), collection_id, {"query": "Unsupported?"})
+    assert response.status_code == 200
+    assert response.json()["status"] == "insufficient_evidence"
+    assert response.json()["claims"] == []
+    assert generation.closed and embedding.closed
+
+
+def test_cloud_provider_failure_is_sanitized_and_closed(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture,
+) -> None:
+    collection_id = uuid4()
+
+    class FailingCloud(FakeGeneration):
+        def generate(self, **kwargs) -> GeneratedAnswer:
+            raise GenerationError("private synthetic provider detail")
+
+    embedding, generation, store = FakeEmbedding(), FailingCloud(), FakeStore()
+    monkeypatch.setattr("rag_ai.api.answers.OllamaEmbeddingProvider", lambda **kwargs: embedding)
+    monkeypatch.setattr("rag_ai.api.answers.OpenAIGenerationProvider", lambda **kwargs: generation)
+    monkeypatch.setattr("rag_ai.api.answers.PostgresIndexStore", lambda dsn: store)
+    with caplog.at_level(logging.INFO):
+        response = _post(_settings(
+            generation_provider="openai", enable_cloud_generation=True,
+            cloud_generation_collection_ids=[collection_id], openai_api_key="synthetic-test-key",
+        ), collection_id, {"query": "private synthetic question"})
+    assert response.status_code == 502
+    assert response.json()["detail"]["code"] == "generation_invalid"
+    assert "private synthetic" not in response.text and "private synthetic" not in caplog.text
+    assert embedding.closed and generation.closed
+
+
+def test_ollama_failure_never_falls_back_to_cloud(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FailingGeneration(FakeGeneration):
+        def generate(self, **kwargs) -> GeneratedAnswer:
+            raise GenerationError("synthetic local outage")
+
+    embedding, generation, store = FakeEmbedding(), FailingGeneration(), FakeStore()
+    _patch(monkeypatch, embedding, generation, store)
+    cloud_calls = []
+    monkeypatch.setattr("rag_ai.api.answers.OpenAIGenerationProvider",
+                        lambda **kwargs: cloud_calls.append(kwargs))
+    response = _post(_settings(
+        enable_cloud_generation=True, cloud_generation_collection_ids=[uuid4()],
+        openai_api_key="synthetic-test-key",
+    ), uuid4(), {"query": "Synthetic?"})
+    assert response.status_code == 502 and cloud_calls == []
+
+
+def test_cloud_configuration_rejects_missing_key_bad_uuid_and_model(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    with pytest.raises(ValidationError, match="OPENAI_API_KEY is required"):
+        _settings(generation_provider="openai", enable_cloud_generation=True,
+                  cloud_generation_collection_ids=[uuid4()])
+    with pytest.raises(ValidationError):
+        _settings(generation_provider="openai", openai_generation_model="unsupported")
+    with pytest.raises(ValidationError, match="Cloud generation is available only in development"):
+        Settings(app_env="production", generation_provider="openai", _env_file=None)
+    monkeypatch.setenv("CLOUD_GENERATION_COLLECTION_IDS", '["not-a-uuid"]')
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
+
+
+def test_cloud_allowlist_parses_json_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    collection_id = uuid4()
+    monkeypatch.setenv("CLOUD_GENERATION_COLLECTION_IDS", json.dumps([str(collection_id)]))
+    settings = Settings(app_env="development", _env_file=None)
+    assert settings.cloud_generation_collection_ids == {collection_id}

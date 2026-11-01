@@ -3,6 +3,7 @@
 from functools import lru_cache
 from typing import Literal
 from urllib.parse import urlparse
+from uuid import UUID
 
 from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -42,6 +43,11 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://127.0.0.1:11434"
     embedding_model: str = "embeddinggemma:300m"
     generation_model: str = "qwen3:4b-instruct"
+    generation_provider: Literal["ollama", "openai"] = "ollama"
+    enable_cloud_generation: bool = False
+    cloud_generation_collection_ids: set[UUID] = Field(default_factory=set)
+    openai_api_key: SecretStr | None = None
+    openai_generation_model: Literal["gpt-6-luna"] = "gpt-6-luna"
     generation_num_ctx: int = Field(default=4096, ge=2048, le=8192)
     generation_num_predict: int = Field(default=512, ge=64, le=1024)
     generation_temperature: float = Field(default=0, ge=0, le=1)
@@ -69,6 +75,16 @@ class Settings(BaseSettings):
             raise ValueError("Document retrieval cannot be enabled in production.")
         if self.app_env == "production" and self.enable_rag_answer_endpoint:
             raise ValueError("RAG answer endpoint cannot be enabled in production.")
+        if self.app_env != "development" and (
+            self.enable_cloud_generation or self.generation_provider == "openai"
+        ):
+            raise ValueError("Cloud generation is available only in development.")
+        if (
+            self.generation_provider == "openai" and self.enable_cloud_generation
+            and self.enable_rag_answer_endpoint
+            and (self.openai_api_key is None or not self.openai_api_key.get_secret_value().strip())
+        ):
+            raise ValueError("OPENAI_API_KEY is required for enabled cloud generation.")
         try:
             validate_local_ollama_url(self.ollama_base_url)
         except ValueError as exc:
