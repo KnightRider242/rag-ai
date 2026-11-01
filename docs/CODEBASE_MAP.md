@@ -1,19 +1,20 @@
 # Codebase map
 
-This map describes the implemented local Python backend on stable `main`. The merged PDF-to-answer E2E test covers that path; multimodal processing remains planned. Check the linked code when changing behavior; [architecture decisions](ARCHITECTURE_DECISIONS.md) explain the broader direction and [the roadmap](ROADMAP.md) separates later phases.
+This map describes the merged text-RAG backend and basic PDF raster inspection on stable `main`, plus the unmerged Phase 8 extensions on `feat/multimodal-document-understanding`. Check the linked code when changing behavior; [architecture decisions](ARCHITECTURE_DECISIONS.md) explain the broader direction and [the roadmap](ROADMAP.md) separates later phases.
 
 ## Entry points and boundaries
 
 | Area | Current responsibility |
 | --- | --- |
-| [`src/rag_ai/main.py`](../src/rag_ai/main.py) | `create_app()` builds FastAPI, stores validated settings, always registers `/health`, and conditionally registers parse/chunk, index, search, and answer routes. |
+| [`src/rag_ai/main.py`](../src/rag_ai/main.py) | `create_app()` builds FastAPI, stores validated settings, always registers `/health`, and conditionally registers parse/chunk, index, search, answer, and Phase 8 visual routes. |
 | [`src/rag_ai/core/config.py`](../src/rag_ai/core/config.py) | Pydantic settings load environment values, validate resource limits and the loopback Ollama URL, and reject production route opt-in. |
-| [`src/rag_ai/api/`](../src/rag_ai/api/) | `/health` is process liveness. `documents.py` handles parse/chunk/index uploads, `retrieval.py` handles JSON search, and `answers.py` handles cited answers. These document access routes are development-only and disabled by default. |
+| [`src/rag_ai/api/`](../src/rag_ai/api/) | `/health` is process liveness. `documents.py` handles parse/chunk/index uploads, `retrieval.py` handles JSON search, and `answers.py` handles cited answers. `visual.py` contains the merged PDF raster inspection route and the branch-only preview route; `vision.py` adds local analysis. Document access routes are development-only and disabled by default. |
 | [`src/rag_ai/documents/`](../src/rag_ai/documents/) | `parser.py` validates uploads and extracts text; `chunker.py` uses LangChain's `RecursiveCharacterTextSplitter`; `indexer.py` coordinates bounded embedding batches and storage. |
 | [`src/rag_ai/embeddings/`](../src/rag_ai/embeddings/) | `base.py` defines an `EmbeddingProvider` protocol and batch model; `ollama.py` implements local embeddings through Ollama HTTP. |
 | [`src/rag_ai/retrieval/`](../src/rag_ai/retrieval/) | `service.py` embeds and validates one query, `models.py` defines results, `langchain.py` adapts the service to `BaseRetriever`, and `evaluation.py` scores ranked IDs. |
 | [`src/rag_ai/generation/`](../src/rag_ai/generation/) | Typed structured-output contract and local Ollama `/api/chat` provider. |
 | [`src/rag_ai/rag/`](../src/rag_ai/rag/) | Bounded evidence context, prompt instructions, and single-turn retrieval/generation/citation coordination. |
+| [`src/rag_ai/vision/`](../src/rag_ai/vision/) | Phase 8 typed local VLM boundary and application-owned visual evidence; it does not write to PostgreSQL or produce text-RAG citations. |
 | [`src/rag_ai/storage/`](../src/rag_ai/storage/) | `postgres.py` writes collection-scoped records and performs read-only exact cosine search. `migrate.py`, `__main__.py`, and `migrations/0001_initial.sql` provide explicit versioned schema commands. |
 
 ## Implemented indexing flow
@@ -66,10 +67,16 @@ The local 2026-10-29 run used the dedicated `rag_ai_retrieval_test` database and
 
 ## One end-to-end path
 
-**PDF → `documents/parser.py` → `documents/chunker.py` → `documents/indexer.py` → `embeddings/ollama.py` → `storage/postgres.py` → `retrieval/service.py` → `rag/context.py` → `generation/ollama.py` → `rag/service.py` → cited answer.** `api/documents.py` starts the upload/index path; `api/answers.py` starts a question, calls the same retrieval service used by search, and closes both providers. `rag/context.py` preserves ranking while assigning request-local `S1`, `S2`, … labels to bounded, quoted evidence. The model returns structured claims and labels; `rag/service.py` resolves labels to retrieved document, chunk, filename, and page metadata and rejects unknown labels. Empty retrieval and valid model abstention return `insufficient_evidence`. A valid reference proves provenance, not that its claim follows from the text.
+**PDF → `documents/parser.py` → `documents/chunker.py` → `documents/indexer.py` → `embeddings/ollama.py` → `storage/postgres.py` → `retrieval/service.py` → `rag/context.py` → `generation/ollama.py` → `rag/service.py` → cited answer.** Upload and question enter through separate routes. The answer route closes both providers after use, and `rag/service.py` resolves model-supplied labels against the retrieved chunks. An empty retrieval or valid model abstention returns `insufficient_evidence`; a citation identifies a source but does not prove its claim.
 
 The merged opt-in [`tests/test_local_rag_e2e.py`](../tests/test_local_rag_e2e.py) follows a synthetic two-page PDF through real FastAPI routes, local Ollama, and an isolated PostgreSQL schema; it checks page citations, abstention, and collection filtering. `tests/test_rag_service.py` and `tests/test_answer_api.py` cover controlled failures without live services. The E2E fixture verifies the exact loopback `rag_ai_retrieval_test` destination before schema creation; **other** integration fixtures do not enforce that exact-database preflight. See the [local testing guide](LOCAL_RAG_TESTING.md) for prerequisites, historical results, and test commands. Collection filtering is not caller authorization.
 
+## Phase 8 visual flow on the feature branch
+
+The merged `documents/visual.py` inspects embedded raster occurrences. On this branch it also reports PyMuPDF vector paths and heuristic tables. It reports displayed-page PDF-point bounds; clipped boxes omit invisible portions, while occurrence/path counts include off-page items. Vector paths are not semantic diagrams, and image-based tables have no extracted cell text. New `documents/render.py` renders only one bounded page or region to PNG in memory. `api/visual.py` exposes merged inspection and branch-only preview under the visual-inspection flag.
+
+`api/vision.py` accepts one PDF page/region or one validated PNG/JPEG upload, runs rendering/decoding and the synchronous provider call in a threadpool, then closes the provider in `finally`. `vision/ollama.py` sends base64 image bytes only to the configured loopback Ollama `/api/chat` and rejects incomplete or oversized responses. Validation errors produce bounded 4xx responses; provider failures produce a generic 502 while logs record only a fixed failure category. `vision/evidence.py` builds SHA-256 source IDs, filenames, PDF page numbers, and displayed-page regions from the upload and render operation, never from model text. PDF source coordinates are points; standalone image coordinates are native pixels. The generated description is an observation, not deterministic extraction. `tests/test_visual_structure.py`, `tests/test_vision_provider.py`, and `tests/test_multimodal_api.py` cover this flow with synthetic data and mocked model responses. The text-RAG modules and PostgreSQL schema are unchanged.
+
 ## Planned, not implemented
 
-Cloud providers and multimodal processing, LangGraph workflows, MCP tools, and the React frontend remain roadmap items. Caller/document authorization is also not implemented.
+Cloud providers, persistent visual indexing and visual RAG citations, LangGraph workflows, MCP tools, and the React frontend remain roadmap items. Caller/document authorization is also not implemented.

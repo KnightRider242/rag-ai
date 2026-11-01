@@ -72,7 +72,7 @@ Versioned migrations make schema changes repeatable while protecting data from a
 | `python -m rag_ai.storage upgrade` | **Writes schema state:** transactionally applies pending numbered migrations and records checksums. Safe to rerun on a compatible versioned schema. | `Schema at version 1.` with the current files. Refuses an existing unversioned Phase 4 schema. |
 | `python -m rag_ai.storage adopt-legacy` | **Writes migration history:** verifies the known unversioned Phase 4 shape, then records version 1 without rewriting document tables. | `Adopted legacy schema as version 1.`; refuses partial/incompatible or already-versioned schemas. |
 
-The last user-reported status of the existing local database was **`unversioned Phase 4 schema`**. That status was not checked again for this document; do not assume adoption has happened. For an **empty, new** database, use `status`, then—after authorization—`upgrade`, then `status`. For the reported **unversioned** database, obtain operational authorization and a verified backup first, then use this sequence:
+The [2026-10-29 adoption record](SESSION_LOG.md#2026-10-29--postgresql-legacy-schema-adoption) reports that the existing local development database reached **`version 1`**. This guide has not rechecked its current state; run read-only `status` before any database operation. For an **empty, new** database, use `status`, then—after authorization—`upgrade`, then `status`. If a different database is **unversioned**, obtain operational authorization and a verified backup first, then use this sequence:
 
 ```text
 python -m rag_ai.storage status
@@ -81,7 +81,7 @@ python -m rag_ai.storage upgrade
 python -m rag_ai.storage status
 ```
 
-The first `status` must say `unversioned Phase 4 schema` before considering adoption. The runner's adoption check compares table columns/types/nullability, essential primary/foreign/unique constraints, dimension checks, and the collection/document index to its supported Phase 4 baseline. Successful `adopt-legacy` records version 1; the following `upgrade` is currently a compatible recheck; final `status` should print `version 1`. **Do not run `adopt-legacy` or `upgrade` without explicit operational authorization.** `status` alone neither fixes nor proves the physical schema is fully compatible. If adoption rejects a partial or changed schema, stop and inspect it against the backup; do not force adoption or modify migration history manually.
+The first `status` must say `unversioned Phase 4 schema` before considering adoption. The runner's adoption check compares table columns/types/nullability, essential primary/foreign/unique constraints, dimension checks, and the collection/document index to its supported Phase 4 baseline. Successful `adopt-legacy` records version 1; the following `upgrade` is currently a compatible recheck; final `status` should print `version 1`. **Do not run `adopt-legacy` or `upgrade` without explicit operational authorization.** Do not repeat adoption on a versioned database. `status` alone neither fixes nor proves the physical schema is fully compatible. If adoption rejects a partial or changed schema, stop and inspect it against the backup; do not force adoption or modify migration history manually.
 
 ## Troubleshooting without accidental writes
 

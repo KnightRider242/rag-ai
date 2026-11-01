@@ -61,3 +61,32 @@ Branch `feat/semantic-retrieval` starts from merged `main` at `4521f18`. This im
 1. Transform PyMuPDF's unrotated image boxes with each page's rotation matrix, intersect them with the displayed page rectangle, and retain an occurrence count even for fully off-page images.
 2. Add synthetic 0/90/180-degree and clipped/off-page tests, preserving invalid-geometry and image-limit rejection; clarify the response convention in the local guide and security plan.
 3. Run focused/default tests, compilation, diff and Git checks; append actual results to the session log. No database, cloud, Git publication, or Phase 8A.2 work.
+
+## Phase 8 local multimodal understanding (approved)
+
+1. Extend PDF inspection with bounded vector-path and table metadata, preserving displayed-page coordinates and existing image fields; verify synthetic PDFs before moving on.
+2. Add bounded in-memory PDF page/region PNG rendering, then a separate loopback-only Ollama vision provider with typed structured output and mocked transport tests.
+3. Add development-only PDF and PNG/JPEG analysis routes that attach application-owned SHA-256, page, and region provenance to model observations; verify source and resource boundaries in synthetic API tests.
+4. Run a five-page synthetic API workflow and applicable focused/default tests; use an opt-in live model check only if a compatible model is already installed, without downloads or database access.
+5. Update only relevant project documentation, review security and all tracked/untracked changes, compile source, run `git diff --check`, and append actual results to the session log. Keep Phase 9 storage/retrieval separate.
+
+## Phase 8 reliability and security hardening (approved)
+
+1. Keep strict Ollama completion and the 512/4096/0 generation settings; add small internal failure categories for limits, transport/timeouts, envelope errors, and structured-output errors while retaining sanitized public 502 responses.
+2. Extend existing Phase 8 provider, API, PDF, and image tests with bounded negative cases, a generation-budget assertion, and cleanup/no-disclosure checks. Change input handling only for a reproduced defect.
+3. Run focused and default regression suites, then explicitly opt in to local Qwen3-VL evaluation of the identified five-page synthetic PDF. Record structural reliability and independently checked visual accuracy separately; make no database or cloud request.
+4. Update security/testing documentation and append actual results to the session log. Review the complete diff, secrets, compilation, Git status, and remaining native-processing and access-control limitations; leave all work uncommitted.
+
+## Phase 8 independent-review remediation (approved)
+
+1. Make the vision response's `done` field accept only the boolean `true`, and classify HTTP status failures separately from timeouts and transport errors. Keep the public 502 contract and provider settings unchanged.
+2. Extend mocked provider and API tests for strict completion, HTTP status, redirect, connection, timeout, and sanitized diagnostics; leave PostgreSQL and text-RAG behavior unchanged.
+3. Reconcile current Phase 8 documentation with the recorded 15-request local evaluation while preserving historical log entries; append this session's actual verification results.
+4. Run focused Phase 8 and full default suites, inspect the diff and worktree, check for secrets and whitespace errors, and report remaining local-development limits. Do not publish Git changes.
+
+## Repository-wide documentation refinement (approved)
+
+1. Inventory project Markdown, agent instructions, setup configuration, and the uncommitted Phase 8 files; verify current-facing claims against routes, settings, providers, storage, and tests.
+2. Correct confirmed status and behavior errors in the README, architecture decisions, codebase map, roadmap, developer and testing guides, and security plan. Keep operational instructions and historical results intact.
+3. Review commands, relative links, code fences, and the roadmap diagram; check consistency and avoid changing application source, tests, dependencies, or runtime configuration.
+4. Run documentation and Git checks, inspect the complete working tree, and append only a dated verification note to the session log. Leave all changes unstaged and unpublished; remaining risks are documentation drift and unverified live-service behavior.
