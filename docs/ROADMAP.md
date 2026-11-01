@@ -1,6 +1,6 @@
 # RAG-AI development roadmap
 
-This roadmap records the approved development direction. Phases 1–6 are merged; Phase 6 entered `main` through PR #8 on 2026-10-31. Phase 7B adds optional OpenAI generation locally on `feat/openai-generation` and awaits review. Later capabilities remain plans. Each phase needs scoped tests, security review, and documentation before merge. See [architecture decisions](ARCHITECTURE_DECISIONS.md) and the [security test plan](SECURITY_TEST_PLAN.md).
+This roadmap records the approved development direction. Phases 1–6 are merged; Phase 6 entered `main` through PR #8 on 2026-10-31. Phase 7B adds optional OpenAI generation on an unmerged parent branch; one authorized live attempt returned HTTP 429. Phase 7C adds Gemini generation on the dependent `feat/gemini-generation` branch, with mocked verification only. Later capabilities remain plans. Each phase needs scoped tests, security review, and documentation before merge. See [architecture decisions](ARCHITECTURE_DECISIONS.md) and the [security test plan](SECURITY_TEST_PLAN.md).
 
 | Phase | Status | Intended outcome |
 | --- | --- | --- |
@@ -10,7 +10,7 @@ This roadmap records the approved development direction. Phases 1–6 are merged
 | 4. Local embeddings and pgvector | Complete for local development | Use native local Ollama at a configurable loopback endpoint and store collection-scoped original documents, chunks, vectors, model names, digests, and measured dimensions in PostgreSQL/pgvector via Docker Compose. Explicit versioned migrations and storage-layer document deletion exist; indexing is development-only and has no collection authorization. |
 | 5. Semantic retrieval and evaluation | Complete for local development | Development-only collection-scoped exact cosine search, model compatibility checks, a LangChain adapter, and a separate synthetic evaluation dataset. Caller/document authorization remains unimplemented. |
 | 6. Local text RAG with citations | Merged for local development | Generate text answers locally from retrieved evidence and cite traceable source locations; handle insufficient evidence explicitly. |
-| 7. Multi-provider LLM and embedding support | Partial: OpenAI generation on feature branch; other providers and cloud embeddings planned | Add independent embedding and LLM interfaces for local Ollama and explicitly authorized cloud AI providers, with explicit local/cloud processing policies. Confidential data must never fall back to a cloud provider automatically. |
+| 7. Multi-provider LLM and embedding support | Partial: OpenAI and Gemini generation on dependent feature branches; Anthropic and cloud embeddings planned | Add independent embedding and LLM interfaces for local Ollama and explicitly authorized cloud AI providers, with explicit local/cloud processing policies. Confidential data must never fall back to a cloud provider automatically. |
 | 8. Multimodal document understanding | Planned | Add an independent vision-language model (VLM) interface; extract and represent multimodal PDFs, images, figures, diagrams, and tables while preserving links to original source files and page or region locations. |
 | 9. Multimodal RAG and visual citations | Planned | Retrieve text and visual evidence and return citations that identify the original visual source. |
 | 10. LangGraph agentic workflows | Planned | Add bounded, observable workflows only where they improve a defined user task; enforce tool and data permissions. |
@@ -28,7 +28,7 @@ This roadmap records the approved development direction. Phases 1–6 are merged
 - Add functional and security tests for each new attack surface. Do not treat a completed phase or passing tests as a production security approval.
 - Add automated Windows, macOS, and Linux test coverage as integrations arrive. Keep development fixtures separate from evaluation datasets and record platform-specific limitations rather than assuming parity.
 
-Phase 6 provides single-turn local answers from retrieved text with application-resolved citations and explicit abstention. Phase 7B keeps local Ollama embeddings and adds an explicitly selected OpenAI generation path for allowlisted collections on a trusted development machine. Gemini, Anthropic, cloud embeddings, multimodal processing, agents, MCP integration, and a frontend remain planned. Public document access remains blocked by missing authentication, authorization, ingress limits, and stronger resource isolation.
+Phase 6 provides single-turn local answers from retrieved text with application-resolved citations and explicit abstention. Phase 7B and dependent Phase 7C keep local Ollama embeddings and add explicitly selected OpenAI and Gemini generation paths for allowlisted collections on a trusted development machine. Anthropic, cloud embeddings, multimodal processing, agents, MCP integration, and a frontend remain planned. Public document access remains blocked by missing authentication, authorization, ingress limits, and stronger resource isolation.
 
 
 ## Application flow
@@ -68,7 +68,7 @@ flowchart TB
         AnswerQuestion["Answer question"] --> AnswerRoute["Development answer route<br/>api/answers.py"]
         AnswerRoute --> RAG["RAGService<br/>rag/service.py"]
         Evidence["Retrieved chunks"] --> Context["Bounded context<br/>rag/context.py"]
-        Context --> Gen["Selected generator<br/>local Ollama or approved OpenAI"]
+        Context --> Gen["Selected generator<br/>Ollama, approved OpenAI, or approved Gemini"]
         Gen --> Validate["Structured output + citation validation"]
         Validate --> Answer["Cited answer or abstention"]
     end
@@ -78,4 +78,4 @@ flowchart TB
     RAG --> Context
 ```
 
-All document routes are for trusted localhost development. Collection filtering and model compatibility protect search correctness; they do not authenticate callers. The LangChain adapter delegates to the same retrieval service. RAGService reuses that service and resolves cited labels against retrieved chunks for either generator. Before selecting OpenAI, the answer route requires explicit cloud opt-in and a server-side collection allowlist; local Ollama remains the default. Citation validity alone does not prove factual support.
+All document routes are for trusted localhost development. Collection filtering and model compatibility protect search correctness; they do not authenticate callers. The LangChain adapter delegates to the same retrieval service. RAGService reuses that service and resolves cited labels against retrieved chunks for all three generators. Before selecting a cloud generator, the answer route requires explicit opt-in and a server-side collection allowlist; local Ollama remains the default. Citation validity alone does not prove factual support.

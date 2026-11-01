@@ -13,6 +13,7 @@ from rag_ai.core.config import Settings
 from rag_ai.embeddings.base import EmbeddingBatch, EmbeddingError
 from rag_ai.generation.base import GeneratedAnswer, GenerationError
 from rag_ai.generation.openai import OpenAIGenerationProvider
+from rag_ai.generation.gemini import GeminiGenerationProvider
 from rag_ai.main import create_app
 from rag_ai.retrieval.models import RetrievedChunk
 from rag_ai.storage.postgres import ModelNameMismatch, StorageError
@@ -346,3 +347,154 @@ def test_cloud_allowlist_parses_json_environment(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setenv("CLOUD_GENERATION_COLLECTION_IDS", json.dumps([str(collection_id)]))
     settings = Settings(app_env="development", _env_file=None)
     assert settings.cloud_generation_collection_ids == {collection_id}
+
+
+def test_gemini_key_does_not_select_cloud(monkeypatch: pytest.MonkeyPatch) -> None:
+    embedding, generation, store = FakeEmbedding(), FakeGeneration(), FakeStore()
+    _patch(monkeypatch, embedding, generation, store)
+    attempts = []
+    monkeypatch.setattr("rag_ai.api.answers.GeminiGenerationProvider",
+                        lambda **kwargs: attempts.append("gemini"))
+    response = _post(_settings(gemini_api_key="synthetic-test-key"), uuid4(), {"query": "Local?"})
+    assert response.status_code == 200 and generation.calls == 1 and attempts == []
+
+
+@pytest.mark.parametrize("enabled,allowlisted", [(False, True), (True, False)])
+def test_gemini_denied_before_retrieval_or_cloud_construction(
+    monkeypatch: pytest.MonkeyPatch, enabled: bool, allowlisted: bool,
+) -> None:
+    collection_id = uuid4()
+    attempts = []
+    monkeypatch.setattr("rag_ai.api.answers.OllamaEmbeddingProvider",
+                        lambda **kwargs: attempts.append("retrieval"))
+    monkeypatch.setattr("rag_ai.api.answers.GeminiGenerationProvider",
+                        lambda **kwargs: attempts.append("gemini"))
+    response = _post(_settings(
+        generation_provider="gemini", enable_cloud_generation=enabled,
+        cloud_generation_collection_ids=[collection_id] if allowlisted else [],
+        gemini_api_key="synthetic-test-key",
+    ), collection_id, {"query": "Synthetic?"})
+    assert response.status_code == 403 and attempts == []
+
+
+@pytest.mark.parametrize("body,expected_status", [
+    ({"status": "answered", "claims": [{"text": "The relay cuts power.", "source_ids": ["S1"]}]}, 200),
+    ({"status": "insufficient_evidence", "claims": []}, 200),
+    ({"status": "answered", "claims": [{"text": "Unsupported.", "source_ids": ["S99"]}]}, 502),
+])
+def test_gemini_route_reuses_citations_and_abstention(
+    monkeypatch: pytest.MonkeyPatch, body: dict, expected_status: int,
+) -> None:
+    collection_id = uuid4()
+    requests: list[httpx.Request] = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(200, json={
+            "modelVersion": "gemini-3.5-flash-lite",
+            "candidates": [{"finishReason": "STOP", "content": {
+                "role": "model", "parts": [{"text": json.dumps(body)}],
+            }}],
+        })
+
+    embedding, store = FakeEmbedding(), FakeStore()
+    monkeypatch.setattr("rag_ai.api.answers.OllamaEmbeddingProvider", lambda **kwargs: embedding)
+    monkeypatch.setattr("rag_ai.api.answers.PostgresIndexStore", lambda dsn: store)
+    providers: list[GeminiGenerationProvider] = []
+
+    def create_gemini(**kwargs) -> GeminiGenerationProvider:
+        provider = GeminiGenerationProvider(transport=httpx.MockTransport(handle), **kwargs)
+        providers.append(provider)
+        return provider
+
+    monkeypatch.setattr("rag_ai.api.answers.GeminiGenerationProvider", create_gemini)
+    response = _post(_settings(
+        generation_provider="gemini", enable_cloud_generation=True,
+        cloud_generation_collection_ids=[collection_id], gemini_api_key="synthetic-test-key",
+    ), collection_id, {"query": "What cuts power?"})
+    assert response.status_code == expected_status
+    if expected_status == 200 and body["status"] == "answered":
+        assert response.json()["claims"][0]["citations"][0]["chunk_id"] == "chunk-1"
+    elif expected_status == 200:
+        assert response.json()["status"] == "insufficient_evidence"
+        assert response.json()["claims"] == []
+    else:
+        assert response.json()["detail"]["code"] == "generation_invalid"
+    assert store.calls[0]["collection_id"] == collection_id
+    assert len(requests) == 1 and providers[0]._client.is_closed and embedding.closed
+
+
+def test_gemini_empty_retrieval_avoids_cloud_request(monkeypatch: pytest.MonkeyPatch) -> None:
+    collection_id = uuid4()
+    embedding, store = FakeEmbedding(), FakeStore(results=[])
+    monkeypatch.setattr("rag_ai.api.answers.OllamaEmbeddingProvider", lambda **kwargs: embedding)
+    monkeypatch.setattr("rag_ai.api.answers.PostgresIndexStore", lambda dsn: store)
+    provider = FakeGeneration()
+    monkeypatch.setattr("rag_ai.api.answers.GeminiGenerationProvider", lambda **kwargs: provider)
+    response = _post(_settings(
+        generation_provider="gemini", enable_cloud_generation=True,
+        cloud_generation_collection_ids=[collection_id], gemini_api_key="synthetic-test-key",
+    ), collection_id, {"query": "Synthetic?"})
+    assert response.status_code == 200 and response.json()["status"] == "insufficient_evidence"
+    assert provider.calls == 0 and provider.closed and embedding.closed
+
+
+def test_gemini_configuration_is_independent_and_fail_closed(monkeypatch: pytest.MonkeyPatch) -> None:
+    assert Settings(_env_file=None).generation_provider == "ollama"
+    openai_settings = _settings(generation_provider="openai", openai_api_key="synthetic")
+    gemini_settings = _settings(generation_provider="gemini", gemini_api_key="synthetic")
+    assert not openai_settings.gemini_api_key or not openai_settings.gemini_api_key.get_secret_value()
+    assert not gemini_settings.openai_api_key or not gemini_settings.openai_api_key.get_secret_value()
+    with pytest.raises(ValidationError, match="GEMINI_API_KEY is required"):
+        _settings(generation_provider="gemini", enable_cloud_generation=True,
+                  cloud_generation_collection_ids=[uuid4()])
+    with pytest.raises(ValidationError):
+        _settings(gemini_generation_model="other")
+    with pytest.raises(ValidationError, match="Cloud generation is available only in development"):
+        Settings(app_env="production", generation_provider="gemini", _env_file=None)
+    monkeypatch.setenv("CLOUD_GENERATION_COLLECTION_IDS", '["invalid-uuid"]')
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
+
+
+def test_gemini_failure_never_falls_back(monkeypatch: pytest.MonkeyPatch) -> None:
+    collection_id = uuid4()
+
+    class FailingGemini(FakeGeneration):
+        def generate(self, **kwargs) -> GeneratedAnswer:
+            raise GenerationError("private synthetic provider detail")
+
+    embedding, gemini, store = FakeEmbedding(), FailingGemini(), FakeStore()
+    monkeypatch.setattr("rag_ai.api.answers.OllamaEmbeddingProvider", lambda **kwargs: embedding)
+    monkeypatch.setattr("rag_ai.api.answers.GeminiGenerationProvider", lambda **kwargs: gemini)
+    monkeypatch.setattr("rag_ai.api.answers.PostgresIndexStore", lambda dsn: store)
+    fallback = []
+    monkeypatch.setattr("rag_ai.api.answers.OpenAIGenerationProvider",
+                        lambda **kwargs: fallback.append("openai"))
+    monkeypatch.setattr("rag_ai.api.answers.OllamaGenerationProvider",
+                        lambda **kwargs: fallback.append("ollama"))
+    response = _post(_settings(
+        generation_provider="gemini", enable_cloud_generation=True,
+        cloud_generation_collection_ids=[collection_id], gemini_api_key="synthetic-test-key",
+    ), collection_id, {"query": "Synthetic?"})
+    assert response.status_code == 502 and fallback == [] and gemini.closed and embedding.closed
+
+
+def test_openai_failure_never_falls_back_to_gemini(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FailingOpenAI(FakeGeneration):
+        def generate(self, **kwargs) -> GeneratedAnswer:
+            raise GenerationError("synthetic outage")
+
+    embedding, generation, store = FakeEmbedding(), FailingOpenAI(), FakeStore()
+    monkeypatch.setattr("rag_ai.api.answers.OllamaEmbeddingProvider", lambda **kwargs: embedding)
+    monkeypatch.setattr("rag_ai.api.answers.OpenAIGenerationProvider", lambda **kwargs: generation)
+    monkeypatch.setattr("rag_ai.api.answers.PostgresIndexStore", lambda dsn: store)
+    gemini_attempts = []
+    monkeypatch.setattr("rag_ai.api.answers.GeminiGenerationProvider",
+                        lambda **kwargs: gemini_attempts.append("gemini"))
+    collection_id = uuid4()
+    response = _post(_settings(
+        generation_provider="openai", enable_cloud_generation=True,
+        cloud_generation_collection_ids=[collection_id], openai_api_key="synthetic-test-key",
+    ), collection_id, {"query": "Synthetic?"})
+    assert response.status_code == 502 and gemini_attempts == []

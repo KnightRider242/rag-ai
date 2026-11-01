@@ -27,3 +27,10 @@ Branch `feat/semantic-retrieval` starts from merged `main` at `4521f18`. This im
 2. Add explicit `ollama|openai` selection and a fail-closed development-only cloud transfer gate in settings and the answer route: separate enable flag, server-owned collection UUID allowlist, supported model, and secret credential. Check permission before retrieval and provider construction; never fall back from Ollama.
 3. Test the OpenAI client with synthetic MockTransport responses and assert unauthorized configurations make zero cloud requests. Preserve local route, citation, and abstention behavior; run focused and full local-only regression tests without a real OpenAI request or database modification.
 4. Update `.env.example`, README, architecture/learning/security docs, and append the session log. Review tracked and untracked files, secrets, platform effects, and `git diff --check`; report exact verification and cloud-data limitations. No dependencies or publication operations.
+
+## Phase 7C Gemini generation (approved)
+
+1. Add a fixed-host HTTPX `generateContent` provider for the allowlisted `gemini-3.5-flash-lite` model. Use Google's current JSON response format, bounded output, sanitized failures, and strict candidate/role/finish/model checks; convert only validated text into `GeneratedAnswer`.
+2. Extend existing Pydantic settings and the answer-route cloud gate to select Gemini explicitly while retaining Ollama as default and OpenAI unchanged. Reuse collection transfer permission, local retrieval, threadpool execution, citations, and cleanup; no fallback or database/schema changes.
+3. Add synthetic MockTransport provider tests and configuration/API security tests, then run targeted, existing cloud/local regression, and full suites. Use only the verified disposable test database for optional local integration; make no live cloud request.
+4. Update the environment example and only relevant README, architecture, security, roadmap, and learning documentation. Append measured results to the session log; review all diffs, secrets, `git diff --check`, and unresolved data-handling risks. Leave changes uncommitted.

@@ -11,6 +11,7 @@ from rag_ai.embeddings.ollama import OllamaEmbeddingProvider
 from rag_ai.generation.base import GenerationConfig, GenerationError
 from rag_ai.generation.ollama import OllamaGenerationProvider
 from rag_ai.generation.openai import OpenAIGenerationProvider
+from rag_ai.generation.gemini import GeminiGenerationProvider
 from rag_ai.rag.context import ContextLimitError, ContextLimits
 from rag_ai.rag.models import AnswerRequest, AnswerResponse
 from rag_ai.rag.service import CitationError, RAGService
@@ -29,14 +30,18 @@ async def answer_collection(
 ) -> AnswerResponse:
     """Retrieve locally, then use only the explicitly authorized generator."""
     settings: Settings = request.app.state.settings
-    if settings.generation_provider == "openai":
+    if settings.generation_provider in {"openai", "gemini"}:
         if (
             settings.app_env != "development" or not settings.enable_rag_answer_endpoint
             or not settings.enable_cloud_generation
             or collection_id not in settings.cloud_generation_collection_ids
         ):
             raise HTTPException(status_code=403, detail={"code": "cloud_generation_forbidden"})
-        if settings.openai_api_key is None or not settings.openai_api_key.get_secret_value().strip():
+        credential = (
+            settings.openai_api_key if settings.generation_provider == "openai"
+            else settings.gemini_api_key
+        )
+        if credential is None or not credential.get_secret_value().strip():
             raise HTTPException(status_code=503, detail={"code": "cloud_generation_unconfigured"})
     if settings.database_url is None:
         raise HTTPException(status_code=503, detail={"code": "database_unconfigured"})
@@ -50,6 +55,11 @@ async def answer_collection(
                 generation = OpenAIGenerationProvider(
                     api_key=settings.openai_api_key,
                     model_name=settings.openai_generation_model,
+                )
+            elif settings.generation_provider == "gemini":
+                generation = GeminiGenerationProvider(
+                    api_key=settings.gemini_api_key,
+                    model_name=settings.gemini_generation_model,
                 )
             else:
                 generation = OllamaGenerationProvider(

@@ -2,9 +2,9 @@
 
 These decisions describe the approved direction as of 2026-10-28. They guide future work; they do not imply that planned integrations exist. Revisit a decision on its feature branch if implementation evidence warrants a change, and record the reason.
 
-## Current baseline (merged Phases 1–6 and Phase 7B feature branch)
+## Current baseline (merged Phases 1–6 and dependent Phase 7B/7C feature branches)
 
-The FastAPI backend exposes `/health` and, with explicit development configuration, `/documents/parse`, `/documents/chunk`, `/collections/{collection_id}/documents/index`, `/collections/{collection_id}/search`, and `/collections/{collection_id}/answer`. PDF, TXT, and Markdown extraction, LangChain text splitting, local Ollama embeddings and generation, PostgreSQL/pgvector persistence, exact semantic search, and single-turn cited answers are merged. This feature branch adds explicitly gated OpenAI generation, while embeddings stay local. Development routes have no authentication or collection authorization and are restricted to trusted localhost use. There is no vision model, agent, MCP tool, or frontend.
+The FastAPI backend exposes `/health` and, with explicit development configuration, `/documents/parse`, `/documents/chunk`, `/collections/{collection_id}/documents/index`, `/collections/{collection_id}/search`, and `/collections/{collection_id}/answer`. PDF, TXT, and Markdown extraction, LangChain text splitting, local Ollama embeddings and generation, PostgreSQL/pgvector persistence, exact semantic search, and single-turn cited answers are merged. The unmerged OpenAI parent branch and this dependent Gemini branch add explicitly gated cloud generation; embeddings stay local. Development routes have no authentication or collection authorization and are restricted to trusted localhost use. There is no vision model, agent, MCP tool, or frontend.
 
 ## AD-01 — Local-first and explicit processing location
 
@@ -12,7 +12,7 @@ The FastAPI backend exposes `/health` and, with explicit development configurati
 
 **Reason:** Processing location affects confidentiality and data-handling obligations. A local-first path keeps early integration tests independent of external credentials and services.
 
-**Implementation status:** Phases 4 and 6 implement loopback-only Ollama embedding and generation with no cloud fallback. Phase 7B adds a development-only OpenAI generation path with an operator-controlled collection allowlist; general data-classification policy and production caller authorization are not implemented.
+**Implementation status:** Phases 4 and 6 implement loopback-only Ollama embedding and generation with no cloud fallback. Phase 7B adds OpenAI and dependent Phase 7C adds Gemini behind one development-only operator-controlled collection allowlist; general data-classification policy and production caller authorization are not implemented.
 
 ## AD-02 — Provider-independent capabilities
 
@@ -20,7 +20,7 @@ The FastAPI backend exposes `/health` and, with explicit development configurati
 
 **Reason:** Provider changes should not alter document ownership, provenance, or authorization behavior.
 
-**Implementation status:** Small embedding and generation provider interfaces and local Ollama implementations exist. Phase 7B adds one OpenAI generation implementation; cloud embeddings and the VLM interface remain planned.
+**Implementation status:** Small embedding and generation provider interfaces and local Ollama implementations exist. The dependent Phase 7B/7C branches add OpenAI and Gemini generation implementations; cloud embeddings and the VLM interface remain planned.
 
 ## AD-03 — Collection-scoped persistence and vector compatibility
 
@@ -84,4 +84,12 @@ The FastAPI backend exposes `/health` and, with explicit development configurati
 
 **Reason:** A configured credential does not authorize sending documents. An explicit collection gate limits accidental transfer while the fixed endpoint and validated envelope prevent redirect, tool, and malformed-output ambiguity. The existing retrieval and citation pipeline remains one auditable implementation.
 
-**Implementation status:** This branch implements only OpenAI text generation with mocked provider tests. The question and bounded retrieved text, filenames, and page numbers may be transmitted for an allowlisted request. `store: false` does not by itself remove provider abuse-monitoring retention. A collection UUID allowlist is a single-developer data-transfer control, not caller identity or production authorization. Live OpenAI behavior, cost, quality, and retention configuration were not verified.
+**Implementation status:** The unmerged parent branch implements OpenAI text generation with mocked provider tests. One later authorized synthetic live request received HTTP 429 without a completed answer. The question and bounded retrieved text, filenames, and page numbers may be transmitted for an allowlisted request. `store: false` does not by itself remove provider abuse-monitoring retention. A collection UUID allowlist is a single-developer data-transfer control, not caller identity or production authorization. Live OpenAI generation quality and retention configuration remain unverified.
+
+## AD-11 — Gemini uses the same cloud transfer gate and answer contract
+
+**Decision:** Add only `gemini-3.5-flash-lite` on Google's fixed HTTPS `generateContent` endpoint. Use `systemInstruction`, one user content item, one candidate, and Google's JSON `responseFormat`, without tools or fallback. Map the existing output limit to `maxOutputTokens`; leave Ollama context/temperature and Gemini thinking controls unset. Accept only a successful model-role text candidate with `STOP` and a model version equal to the configured alias or that alias plus a numeric version suffix. Validate the resulting JSON with `GeneratedAnswer`, then let `RAGService` resolve citation labels. Reuse the development-only cloud flag, server-owned collection UUID allowlist, and secret-key gate before retrieval.
+
+**Reason:** Provider-specific request and response fields belong at the provider boundary. Reusing the gate and domain contract keeps cloud transfer policy, abstention, and citations consistent without duplicating retrieval or orchestration. The narrow version rule avoids assuming a stable alias must be returned verbatim while rejecting unrelated model families.
+
+**Implementation status:** This dependent feature branch implements Gemini text generation with mocked HTTP tests only. Actual API acceptance, model-version strings, quality, cost, and regional/data-handling behavior remain unverified. Caller authentication and document authorization are still absent, so public/shared deployment remains blocked.

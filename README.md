@@ -166,6 +166,20 @@ Supply the credential privately; the blank value is only a placeholder. `CLOUD_G
 
 Only the bounded question and retrieved evidence context are sent to OpenAI through the fixed HTTPS Responses API; the context currently includes source labels, chunk text, filenames, and page numbers. Original document bytes, raw vectors, and the rest of the collection are not sent. The request has no tools or streaming, uses strict structured output and `store: false`, and maps `GENERATION_NUM_PREDICT` to `max_output_tokens`; Ollama's `num_ctx` and `temperature` are not forwarded. `store: false` disables stored response state for API retrieval, but does **not** by itself eliminate [abuse-monitoring retention or other provider data handling](https://developers.openai.com/api/docs/guides/your-data). Review those controls before approving confidential content. Refusals, incomplete responses, invalid JSON, and ambiguous output become controlled provider errors rather than evidence-based abstentions. The existing application citation validator resolves labels for either provider; it does not prove factual support.
 
+### Optional Gemini generation (Phase 7C dependent feature branch)
+
+This branch builds on the **unmerged** OpenAI feature branch. Gemini uses the same development-only answer route, cloud enable flag, and server-owned JSON UUID allowlist. To select it for an explicitly approved collection, set `GENERATION_PROVIDER=gemini`, `GEMINI_GENERATION_MODEL=gemini-3.5-flash-lite`, and a private `GEMINI_API_KEY`, alongside `APP_ENV=development`, `ENABLE_RAG_ANSWER_ENDPOINT=true`, `ENABLE_CLOUD_GENERATION=true`, and the collection allowlist. A key alone does not authorize transfer. Keep the server bound to trusted localhost; there is no caller authentication or collection authorization.
+
+The answer route still retrieves with local Ollama embeddings. The Gemini provider sends only the bounded question/evidence context to Google's fixed HTTPS `generateContent` endpoint, requests one JSON text candidate without tools, and validates completion, model version, and the existing answer contract. `GENERATION_NUM_PREDICT` maps to `maxOutputTokens`; Ollama context/temperature and OpenAI reasoning settings are not forwarded. Google model thinking remains at its documented default. A blocked or malformed response is a provider error, not evidence-based abstention. Citation labels are still resolved by `RAGService`.
+
+| Provider | Generation | Embeddings | Verification |
+| --- | --- | --- | --- |
+| Ollama (default) | Local | Local Ollama | Live local tests |
+| OpenAI (unmerged parent branch) | Optional cloud | Local Ollama only | Mocked tests; one live HTTP 429, no completed response |
+| Gemini (this branch) | Optional cloud | Local Ollama only | Mocked HTTP tests; no live Google request |
+
+Before approving any actual Google transfer, review the current [Gemini API terms](https://ai.google.dev/gemini-api/terms), [retention controls](https://ai.google.dev/gemini-api/docs/zdr), and [available regions](https://ai.google.dev/gemini-api/docs/available-regions). Free and paid service data handling differs; a local allowlist does not establish regional processing or zero retention. Do not send confidential documents without a separate authorization and policy review.
+
 ## Tests
 
 ```bash
@@ -180,13 +194,17 @@ On 2026-10-29, the expanded evaluation passed 5 tests and the full suite with de
 
 For Phase 7B on 2026-10-31, focused mocked provider/answer tests passed **97** tests. The complete default suite passed **242**, skipped **24** opt-in live database/Ollama tests, and emitted **13** LangSmith Python 3.14 deprecation warnings. With the dedicated local test database and Ollama enabled, the complete suite passed **266** tests, with **0 failed**, **0 skipped**, and **13 warnings**. OpenAI tests used HTTPX MockTransport; no real OpenAI API call or cloud quality evaluation was performed.
 
+A separate authorized Phase 7B live attempt on 2026-10-31 received OpenAI HTTP 429 on its first synthetic request and stopped; the second question was not sent. The [session log](docs/SESSION_LOG.md) records the failed check. Gemini HTTP tests use synthetic MockTransport responses only; current Phase 7C test results are recorded in the session log.
+
+For Phase 7C on 2026-11-01, targeted Gemini/OpenAI/answer-API tests passed **106** tests. The default suite passed **291**, skipped **24** opt-in local integration tests, and reported **13** LangSmith warnings. With the dedicated test database and local Ollama enabled, the complete suite passed **315**, with **0 failed**, **0 skipped**, and **13 warnings**. No real Gemini or additional OpenAI request was made.
+
 ## Configuration
 
 The application reads environment variables and optionally `.env` from the working directory. `APP_NAME` changes the OpenAPI title. `APP_ENV`, `ENABLE_DOCUMENT_PARSE_ENDPOINT`, `ENABLE_DOCUMENT_INDEX_ENDPOINT`, `ENABLE_DOCUMENT_RETRIEVAL_ENDPOINT`, and `ENABLE_RAG_ANSWER_ENDPOINT` control development route registration. Upload, extraction, chunking, embedding, and generation limits are described above and in `.env.example`. `DATABASE_URL` is used by development indexing/retrieval/answers and explicit migration commands. Docker Compose reads `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, and optionally `POSTGRES_PORT` from `.env`. Use a managed secret store for deployed credentials; do not commit credentials or environment files.
 
 ## Roadmap
 
-Phases 1–6, including local cited answers, are merged. Phase 7B adds an opt-in OpenAI generation provider on this feature branch, pending review. Local inference can use a CPU; [GPU acceleration](https://docs.ollama.com/gpu) depends on the host and Ollama support. Further provider integrations, cloud embeddings, multimodal evidence, LangGraph workflows, MCP tools, a React frontend, and deployment hardening remain planned. See the [full roadmap](docs/ROADMAP.md) and [architecture decisions](docs/ARCHITECTURE_DECISIONS.md).
+Phases 1–6, including local cited answers, are merged. This Gemini feature branch depends on the unmerged OpenAI provider branch; both cloud providers require separate review. Local inference can use a CPU; [GPU acceleration](https://docs.ollama.com/gpu) depends on the host and Ollama support. Anthropic, cloud embeddings, multimodal evidence, LangGraph workflows, MCP tools, a React frontend, and deployment hardening remain planned. See the [full roadmap](docs/ROADMAP.md) and [architecture decisions](docs/ARCHITECTURE_DECISIONS.md).
 
 ## Layout
 
@@ -197,7 +215,7 @@ src/rag_ai/documents/ Validated extraction and deterministic chunking
 src/rag_ai/embeddings/ Local Ollama provider and embedding boundary
 src/rag_ai/storage/   Collection-scoped PostgreSQL/pgvector indexing
 src/rag_ai/retrieval/ Typed search, LangChain adapter, and evaluation metrics
-src/rag_ai/generation/ Structured local and opt-in OpenAI generation providers
+src/rag_ai/generation/ Structured local, OpenAI, and Gemini generation providers
 src/rag_ai/rag/       Bounded context, prompts, and citation resolution
 src/rag_ai/main.py    FastAPI application factory and entry point
 tests/               API tests
