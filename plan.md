@@ -20,3 +20,24 @@ Branch `feat/semantic-retrieval` starts from merged `main` at `4521f18`. This im
 2. Add a separate development-only answer route and Pydantic settings for model, output, and context bounds. Use the threadpool for synchronous clients, close providers on every path, and return controlled errors without logging question or evidence text.
 3. Add synthetic unit/API/security tests plus opt-in disposable-schema PostgreSQL/Ollama tests. Verify answer, abstention, invalid citations, provider failures, collection scoping, and source provenance; keep semantic quality checks separate from structural guarantees.
 4. Update README, roadmap flow, codebase map, developer guide, architecture decisions, security plan, environment example, and append the session log. Run targeted then full tests, inspect every tracked/untracked change, check secrets and `git diff --check`, and report measured results and limitations. No Phase 7 work or Git publication.
+
+## Local RAG end-to-end validation (approved)
+
+1. Verify the clean `test/local-rag-e2e` Phase 6 baseline and trace the existing PDF upload, chunk, index, search, and answer routes plus the disposable-schema fixture. Reuse those interfaces without changing application behavior.
+2. Add one opt-in ASGI test with a two-page synthetic in-memory PDF and a second-collection TXT distractor. Check database destination before fixture writes, migrate only the new schema, exercise every route, validate provenance and abstention, and record informational timings without logging content.
+3. Run the new test first, investigate any genuine failure, then run existing local integration and complete regression suites against only `rag_ai_retrieval_test` and installed loopback Ollama models. Keep the default suite service-free and make no cloud calls.
+4. Document test setup, citation and isolation limits, and actual results in the developer/security guides and session log. Review tracked/untracked changes, secrets, `git diff --check`, and remaining risks; leave everything uncommitted.
+
+## Local RAG testing documentation finalization (approved)
+
+1. Verify the existing `test/local-rag-e2e` changes, actual FastAPI routes, schema CLI, and test fixtures. Separate the user's manual Swagger observations from the previous Codex automated results; make no runtime or test edits.
+2. Add one practical `docs/LOCAL_RAG_TESTING.md` covering safe localhost startup, a synthetic two-page PDF, the manual Swagger/API sequence, citation mechanics, opt-in automated tests, troubleshooting, and limitations.
+3. Link the guide from README and the developer/codebase/security documents; correct stale Phase 6 status in README/roadmap while keeping later release work planned. Append a dated documentation-only session-log entry without replacing history.
+4. Check commands and examples against code, relative links, changed-file secrets, Git status, and `git diff --check`. Report documentation verification separately from historical test results; leave all changes uncommitted.
+
+## Dedicated PostgreSQL E2E destination safety (approved)
+
+1. Verify libpq URL, environment, and service-file precedence against PostgreSQL and psycopg documentation. Keep the user's `.env` and application settings unchanged.
+2. In the E2E fixture, reject service/routing overrides and ambiguous URL destinations before any connection; pin an explicit loopback address in the exact DSN passed to the existing disposable-schema fixture. Add connection-free negative and positive tests.
+3. Run focused preflight tests, then the default suite with temporary development-route overrides. Run local integration only after verifying the dedicated database and Ollama; inspect fixture cleanup, changed files, secrets, and `git diff --check`.
+4. Update only the local testing guide, security plan, and append-only session log with actual results and remaining limits. Leave all work uncommitted.
