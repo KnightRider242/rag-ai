@@ -46,6 +46,10 @@ RAG-AI is an enterprise knowledge assistant under development. The Python API su
 
 The Python backend targets Windows, macOS, and Linux. On Windows PowerShell, use `Copy-Item .env.example .env`, `py -3.12 -m venv .venv`, `.venv\Scripts\Activate.ps1`, and `python -m pip install -e '.[dev]'` for steps 1–2; then use the same `docker compose` and `uvicorn` commands. Use an installed Python version 3.12 or newer. These are setup instructions, not a claim that the full test suite has been run on every platform.
 
+## Try RAG-AI Locally
+
+With the project environment, Docker Compose PostgreSQL/pgvector, and native Ollama installed, enable the four development document/search/answer flags in your existing private `.env`. Start the database, verify the schema with `python -m rag_ai.storage status`, confirm the two local models are installed, and run `uvicorn rag_ai.main:app --reload --host 127.0.0.1 --port 8000`. Open `http://127.0.0.1:8000/docs` to upload a synthetic PDF, inspect parsing/chunks, index into one UUID collection, search, and ask for a cited answer. Keep the same UUID for those operations; it is not an access credential. See [Local RAG Testing](docs/LOCAL_RAG_TESTING.md) for safe setup, a two-page fixture, manual observations, automated verification, and troubleshooting. Manual indexing persists the document in your application database; the E2E test uses a separate disposable schema.
+
 ## Document parsing
 
 The parse route is **disabled by default**. To use it for local development, set both values in `.env`:
@@ -158,6 +162,10 @@ Tests exercise parsing and chunking through the HTTP API without requiring a run
 
 The default suite skips the real database/Ollama tests. To run PostgreSQL integration tests, start the Compose database and set `RAG_AI_TEST_DATABASE_URL` to a **dedicated local test database URL** with the `vector` extension installed and schema-creation permission. Set `RAG_AI_RUN_OLLAMA_TESTS=1` as well to run local Ollama indexing, semantic evaluation, and Phase 6 cited-answer evaluation with `embeddinggemma:300m` and `qwen3:4b-instruct`. Then run `python -m pytest -q`. Tests use synthetic documents in disposable, randomly named schemas and remove those schemas afterward. Never use a database containing real documents for destructive integration tests. Windows and macOS runtime checks remain outstanding.
 
+`tests/test_local_rag_e2e.py` is an additional opt-in API test. It creates a two-page searchable PDF in memory, then calls the parse, chunk, index, search, and answer routes with `httpx.ASGITransport`. It requires the same two opt-in settings and refuses any test URL outside the local `rag_ai_retrieval_test` database before creating a schema. Run it alone with `python -m pytest -q -s tests/test_local_rag_e2e.py` after setting the test database URL and Ollama flag. The test checks page-specific citations, abstention, and collection filtering; it does not establish production authorization or general answer quality. See the [developer guide](docs/DEVELOPER_GUIDE.md) for failure diagnosis.
+
+In the completed 2026-11-01 local E2E development session, the focused live PDF test passed **1/1**, the destination-preflight tests passed **3/3**, the complete local PostgreSQL/Ollama suite passed **229/229**, and the default suite passed **204** with **25** opt-in skips. Two earlier diagnostic live attempts failed the relay-wording assertion before the synthetic source text was clarified; the assertion was retained. These are historical results, not tests rerun for this documentation update. See the [testing guide](docs/LOCAL_RAG_TESTING.md#automated-end-to-end-test-and-recorded-results) for the exact context.
+
 On 2026-10-29, the expanded evaluation passed 5 tests and the full suite with dedicated PostgreSQL and local Ollama enabled passed **168 tests, 0 failed, 0 skipped**. The previous three-case evaluation and complete suite had passed 3 and 166 tests respectively (user-reported historical runs). These runs emitted 13 Python 3.14 deprecation warnings from the installed `langsmith` dependency. One older orphan `rag_ai_test_*` schema remains in the dedicated test database; it was not deleted. Passing tests do not establish production authorization or retrieval quality beyond the synthetic cases.
 
 ## Configuration
@@ -166,7 +174,7 @@ The application reads environment variables and optionally `.env` from the worki
 
 ## Roadmap
 
-Phases 1–5 provide the backend foundation, ingestion, chunking, local Ollama/pgvector indexing, and semantic retrieval/evaluation for trusted local development. Phase 6 adds local cited answers on this feature branch, pending human review. Local inference can use a CPU; [GPU acceleration](https://docs.ollama.com/gpu) depends on the host and Ollama support. Later phases plan explicit cloud-provider choice, multimodal evidence, LangGraph workflows, MCP tools, a React frontend, and deployment hardening. These later capabilities are not implemented. See the [full roadmap](docs/ROADMAP.md) and [architecture decisions](docs/ARCHITECTURE_DECISIONS.md).
+Phases 1–6 provide the local backend, ingestion, chunking, Ollama/pgvector indexing, semantic retrieval, and cited answers. The Phase 6 path has also passed a local PDF-to-answer E2E regression on this test branch; human review of this test remains pending. Local inference can use a CPU; [GPU acceleration](https://docs.ollama.com/gpu) depends on the host and Ollama support. Later phases plan explicit cloud-provider choice, multimodal evidence, LangGraph workflows, MCP tools, a React frontend, and deployment hardening. These later capabilities are not implemented on stable `main`. See the [full roadmap](docs/ROADMAP.md) and [architecture decisions](docs/ARCHITECTURE_DECISIONS.md).
 
 ## Layout
 

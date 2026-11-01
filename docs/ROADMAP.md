@@ -1,6 +1,6 @@
 # RAG-AI development roadmap
 
-This roadmap records the approved development direction. Phases 1–5 are merged; Phase 6 is implemented locally on `feat/local-rag-answers` and awaits human review. Later phases are plans, not current capabilities. Each phase requires its own scoped branch, tests, security review, and documentation before merge. See [architecture decisions](ARCHITECTURE_DECISIONS.md) and the [security test plan](SECURITY_TEST_PLAN.md).
+This roadmap records the approved development direction. Phases 1–6 are present on stable `main`. The local Phase 6 PDF-to-answer workflow passed automated E2E verification on `test/local-rag-e2e` and was exercised manually through Swagger; this test branch still needs human review. Later phases are plans, not current capabilities. Each phase requires its own scoped branch, tests, security review, and documentation before merge. See [architecture decisions](ARCHITECTURE_DECISIONS.md), the [local testing guide](LOCAL_RAG_TESTING.md), and the [security test plan](SECURITY_TEST_PLAN.md).
 
 | Phase | Status | Intended outcome |
 | --- | --- | --- |
@@ -9,7 +9,7 @@ This roadmap records the approved development direction. Phases 1–5 are merged
 | 3. Document chunking | Complete | Development-only LangChain text splitting with source-page metadata, deterministic IDs, and resource bounds; no persistence. |
 | 4. Local embeddings and pgvector | Complete for local development | Use native local Ollama at a configurable loopback endpoint and store collection-scoped original documents, chunks, vectors, model names, digests, and measured dimensions in PostgreSQL/pgvector via Docker Compose. Explicit versioned migrations and storage-layer document deletion exist; indexing is development-only and has no collection authorization. |
 | 5. Semantic retrieval and evaluation | Complete for local development | Development-only collection-scoped exact cosine search, model compatibility checks, a LangChain adapter, and a separate synthetic evaluation dataset. Caller/document authorization remains unimplemented. |
-| 6. Local text RAG with citations | Implemented locally; human review pending | Generate text answers locally from retrieved evidence and cite traceable source locations; handle insufficient evidence explicitly. |
+| 6. Local text RAG with citations | On `main`; local E2E tested | Generate text answers locally from retrieved evidence and cite traceable source locations; handle insufficient evidence explicitly. |
 | 7. Multi-provider LLM and embedding support | Planned | Add independent embedding and LLM interfaces for local Ollama and explicitly authorized cloud AI providers, with explicit local/cloud processing policies. Confidential data must never fall back to a cloud provider automatically. |
 | 8. Multimodal document understanding | Planned | Add an independent vision-language model (VLM) interface; extract and represent multimodal PDFs, images, figures, diagrams, and tables while preserving links to original source files and page or region locations. |
 | 9. Multimodal RAG and visual citations | Planned | Retrieve text and visual evidence and return citations that identify the original visual source. |
@@ -29,6 +29,8 @@ This roadmap records the approved development direction. Phases 1–5 are merged
 - Add automated Windows, macOS, and Linux test coverage as integrations arrive. Keep development fixtures separate from evaluation datasets and record platform-specific limitations rather than assuming parity.
 
 Phase 6 adds single-turn local answers from retrieved text with application-resolved citations and explicit abstention. Multimodal processing, agents, MCP integration, and a frontend remain planned. Public document access remains blocked by missing authentication, authorization, ingress limits, and stronger resource isolation.
+
+Before later interface or multimodal work, the local PDF-to-answer path has a reproducible [manual and automated test](LOCAL_RAG_TESTING.md). Hardware-aware installation, configurable runtime setup, Docker/Podman support, cross-platform packaging, and final developer documentation remain future release requirements; this E2E milestone does not implement them.
 
 
 ## Application flow

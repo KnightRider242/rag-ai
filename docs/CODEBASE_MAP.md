@@ -64,6 +64,8 @@ The local 2026-10-29 run used the dedicated `rag_ai_retrieval_test` database and
 
 `api/answers.py` runs `RAGService.answer()` in a threadpool and closes both providers. `RAGService` reuses `RetrievalService`; `rag/context.py` assigns request-local labels to ranked chunks and rejects overlong evidence rather than truncating it. `rag/prompts.py` presents untrusted content as delimited evidence. `generation/ollama.py` requests JSON-schema output from local Ollama, validates the returned status and claims, and bounds the response. `RAGService` resolves cited labels to retrieval metadata and rejects unknown labels. Empty retrieval abstains without generation. The application verifies provenance, not entailment. `tests/test_generation.py`, `tests/test_rag_service.py`, `tests/test_answer_api.py`, and opt-in `tests/test_rag_integration.py` cover this flow with synthetic data.
 
+The opt-in [`tests/test_local_rag_e2e.py`](../tests/test_local_rag_e2e.py) additionally follows a synthetic two-page PDF through these actual FastAPI routes and checks source-page citations. See the [local testing guide](LOCAL_RAG_TESTING.md) for manual and automated steps.
+
 ## Planned, not implemented
 
 Cloud providers and multimodal processing, LangGraph workflows, MCP tools, and the React frontend remain roadmap items. Caller/document authorization is also not implemented.
