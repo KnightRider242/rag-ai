@@ -10,6 +10,7 @@ from rag_ai.api.visual import router as visual_router
 from rag_ai.api.vision import pdf_router as vision_pdf_router, image_router as vision_image_router
 from rag_ai.api.visual_elements import router as visual_elements_router
 from rag_ai.api.interpretations import router as interpretations_router
+from rag_ai.api.visual_retrieval import router as visual_retrieval_router
 from rag_ai.core.config import Settings, get_settings
 
 
@@ -35,6 +36,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.include_router(visual_elements_router)
     if settings.app_env == "development" and settings.enable_visual_interpretation_endpoint:
         app.include_router(interpretations_router)
+    if settings.app_env == "development" and settings.enable_visual_retrieval_endpoint:
+        app.include_router(visual_retrieval_router)
     if settings.app_env == "development" and settings.enable_document_retrieval_endpoint:
         app.include_router(retrieval_router)
     if settings.app_env == "development" and settings.enable_rag_answer_endpoint:

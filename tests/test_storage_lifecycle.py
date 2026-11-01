@@ -38,17 +38,17 @@ def _save(store: PostgresIndexStore, collection_id, text: str):
 def test_fresh_migration_and_reexecution(isolated_database_url: str) -> None:
     runner = MigrationRunner(isolated_database_url)
     assert runner.status() == "empty"
-    assert runner.upgrade() == 3
-    assert runner.status() == "version 3"
+    assert runner.upgrade() == 4
+    assert runner.status() == "version 4"
     first = _save(PostgresIndexStore(isolated_database_url), uuid4(), "Synthetic persisted text")
-    assert runner.upgrade() == 3
+    assert runner.upgrade() == 4
     with psycopg.connect(isolated_database_url) as connection:
         assert connection.execute(
             "SELECT count(*) FROM indexed_documents WHERE document_id = %s", (first.document_id,),
         ).fetchone() == (1,)
         assert connection.execute(
             "SELECT count(*) FROM rag_ai_schema_migrations"
-        ).fetchone() == (3,)
+        ).fetchone() == (4,)
 
 
 def test_unknown_schema_version_and_checksum_are_rejected(isolated_database_url: str) -> None:
@@ -57,7 +57,7 @@ def test_unknown_schema_version_and_checksum_are_rejected(isolated_database_url:
     with psycopg.connect(isolated_database_url) as connection:
         connection.execute(
             "INSERT INTO rag_ai_schema_migrations(version, checksum) VALUES (%s, %s)",
-            (4, "synthetic-future-version"),
+            (5, "synthetic-future-version"),
         )
     with pytest.raises(MigrationError, match="newer"):
         runner.upgrade()
@@ -66,7 +66,7 @@ def test_unknown_schema_version_and_checksum_are_rejected(isolated_database_url:
             collection_id=uuid4(), document_id="synthetic",
         )
     with psycopg.connect(isolated_database_url) as connection:
-        connection.execute("DELETE FROM rag_ai_schema_migrations WHERE version = 4")
+        connection.execute("DELETE FROM rag_ai_schema_migrations WHERE version = 5")
         connection.execute("UPDATE rag_ai_schema_migrations SET checksum = 'synthetic-mismatch'")
     with pytest.raises(MigrationError, match="checksum"):
         runner.upgrade()
@@ -116,7 +116,7 @@ def test_unversioned_schema_requires_explicit_verified_adoption(isolated_databas
             "WHERE schemaname = current_schema() AND tablename = 'rag_ai_schema_migrations'"
         ).fetchone() == (0,)
     assert runner.adopt_legacy() == 1
-    assert runner.upgrade() == 3
+    assert runner.upgrade() == 4
     with psycopg.connect(isolated_database_url) as connection:
         assert connection.execute(
             "SELECT d.original_content, c.content, vector_dims(e.embedding) "
