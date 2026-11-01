@@ -50,7 +50,7 @@ def test_parse_endpoint_unavailable_in_test_environment() -> None:
 
 
 def test_parse_endpoint_unavailable_in_production() -> None:
-    settings = Settings(app_env="production", enable_document_parse_endpoint=False)
+    settings = Settings(app_env="production", enable_document_parse_endpoint=False, _env_file=None)
     app = create_app(settings)
 
     assert "/documents/parse" not in app.openapi()["paths"]

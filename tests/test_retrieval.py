@@ -142,15 +142,17 @@ def test_search_route_disabled_by_default_and_outside_development() -> None:
 
 def test_search_route_requires_explicit_development_flag() -> None:
     path = "/collections/{collection_id}/search"
-    assert path not in create_app(Settings(app_env="development")).openapi()["paths"]
+    assert path not in create_app(Settings(app_env="development",
+                                          enable_document_retrieval_endpoint=False,
+                                          _env_file=None)).openapi()["paths"]
     assert path in create_app(Settings(
-        app_env="development", enable_document_retrieval_endpoint=True,
+        app_env="development", enable_document_retrieval_endpoint=True, _env_file=None,
     )).openapi()["paths"]
 
 
 def test_production_cannot_enable_search_route() -> None:
     with pytest.raises(ValidationError, match="Document retrieval cannot be enabled in production"):
-        Settings(app_env="production", enable_document_retrieval_endpoint=True)
+        Settings(app_env="production", enable_document_retrieval_endpoint=True, _env_file=None)
 
 
 @pytest.mark.parametrize("payload", [

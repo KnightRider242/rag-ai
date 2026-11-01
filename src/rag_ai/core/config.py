@@ -37,6 +37,7 @@ class Settings(BaseSettings):
     enable_document_parse_endpoint: bool = False
     enable_document_visual_inspection_endpoint: bool = False
     enable_document_visual_analysis_endpoint: bool = False
+    enable_visual_element_storage_endpoint: bool = False
     enable_document_index_endpoint: bool = False
     enable_document_retrieval_endpoint: bool = False
     enable_rag_answer_endpoint: bool = False
@@ -72,6 +73,8 @@ class Settings(BaseSettings):
             raise ValueError("Document visual inspection cannot be enabled in production.")
         if self.app_env == "production" and self.enable_document_visual_analysis_endpoint:
             raise ValueError("Document visual analysis cannot be enabled in production.")
+        if self.app_env == "production" and self.enable_visual_element_storage_endpoint:
+            raise ValueError("Visual element storage cannot be enabled in production.")
         if self.app_env == "production" and self.enable_document_index_endpoint:
             raise ValueError("Document indexing cannot be enabled in production.")
         if self.app_env == "production" and self.enable_document_retrieval_endpoint:
