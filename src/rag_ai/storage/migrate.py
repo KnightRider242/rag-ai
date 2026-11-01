@@ -146,6 +146,8 @@ def _applied(connection: psycopg.Connection, schema: str) -> list[tuple[int, str
 
 
 def _validate_history(applied: list[tuple[int, str]], migrations: tuple[Migration, ...]) -> int:
+    # A checksum binds recorded versions to the exact packaged SQL; editing
+    # an applied migration must be diagnosed, not silently replayed.
     if [version for version, _ in applied] != list(range(1, len(applied) + 1)):
         raise MigrationError("Database migration history has a gap or invalid version.")
     if len(applied) > len(migrations):

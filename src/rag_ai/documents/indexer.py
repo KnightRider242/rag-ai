@@ -47,12 +47,8 @@ def index_document(
         raise IndexingError("index_chunk_limit", "Document exceeds the indexing chunk limit.", 413)
 
     first_count = min(EMBEDDING_BATCH_SIZE, len(chunked.chunks))
-    
-    # Chunked.chunks contains the text segments extracted from document
-    # chunk.text extracts the text from each segment
-    # provider.embed sends the text to embedded provider here ollama
-    # result is numerical vectors and stored in pgSQL using pgvector
-    
+    # Probe actual model dimensions with one bounded batch before asking the
+    # provider to generate the remaining vectors; models need not use 768.
     first_batch = provider.embed([chunk.text for chunk in chunked.chunks[:first_count]])
     model_name = first_batch.model_name
     model_revision = first_batch.model_revision

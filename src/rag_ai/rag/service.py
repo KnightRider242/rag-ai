@@ -49,6 +49,8 @@ class RAGService:
         claims: list[AnswerClaim] = []
         for claim in generated.claims:
             citations: list[Citation] = []
+            # The model supplies only temporary labels. Source identifiers
+            # and page numbers come from the retrieved chunks, never its text.
             for label in dict.fromkeys(claim.source_ids):
                 chunk = context.sources.get(label)
                 if chunk is None:

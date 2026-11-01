@@ -54,6 +54,8 @@ class PostgresIndexStore:
                     "chunk_id TEXT NOT NULL, chunk_index INTEGER NOT NULL, page_number INTEGER, "
                     "content TEXT NOT NULL, embedding vector NOT NULL) ON COMMIT PRESERVE ROWS"
                 )
+                # Persist staging rows per batch, keeping vectors out of a
+                # long-lived Python list and permanent rows unchanged on failure.
                 connection.commit()
                 offset = 0
                 for batch in chain((first_batch,), remaining_batches):
@@ -80,6 +82,8 @@ class PostgresIndexStore:
                 if offset != len(chunked.chunks):
                     raise ValueError("Embedding batches do not cover every chunk.")
 
+                # Replace the document and all derived rows together; readers
+                # see either the previous index or the completed replacement.
                 with connection.transaction():
                     connection.execute("INSERT INTO collections(id) VALUES (%s) ON CONFLICT DO NOTHING", (collection_id,))
                     connection.execute(
@@ -178,6 +182,9 @@ class PostgresIndexStore:
                     if not any(row[2] == dimensions for row in matching if row[1] == model_revision):
                         raise ModelDimensionMismatch("Collection embeddings use another vector dimension.")
 
+                    # MATERIALIZED filters mixed-dimension and zero vectors
+                    # before pgvector evaluates cosine distance; the same
+                    # snapshot covers compatibility checks and ranking.
                     rows = connection.execute(
                         "WITH eligible AS MATERIALIZED ("
                         "SELECT e.collection_id, c.document_id, e.chunk_id, c.chunk_index, e.embedding "
