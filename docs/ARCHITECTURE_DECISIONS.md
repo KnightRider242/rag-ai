@@ -2,9 +2,9 @@
 
 These decisions describe the approved direction as of 2026-10-28. They guide future work; they do not imply that planned integrations exist. Revisit a decision on its feature branch if implementation evidence warrants a change, and record the reason.
 
-## Current baseline (`main` and Phase 9A.1 feature branch)
+## Current baseline (`main` and Phase 9A.2 feature branch)
 
-Stable `main` includes Phases 1–6 and 8: text RAG, visual inspection, preview, and local vision analysis. The Phase 9A.1 feature branch adds source-only visual metadata persistence for already indexed PDFs. Development routes have no authentication or collection authorization and are restricted to trusted localhost use. There is no cloud provider, agent, MCP tool, or frontend.
+Stable `main` includes Phases 1–6, 8, and 9A.1: text RAG, visual processing, and source-only visual metadata persistence for indexed PDFs. This Phase 9A.2 feature branch adds immutable local model interpretations. Development routes have no authentication or collection authorization and are restricted to trusted localhost use. There is no cloud provider, agent, MCP tool, or frontend.
 
 ## AD-01 — Local-first and explicit processing location
 
@@ -36,7 +36,7 @@ Stable `main` includes Phases 1–6 and 8: text RAG, visual inspection, preview,
 
 **Reason:** Answers need verifiable evidence, and later multimodal features need source provenance.
 
-**Implementation status:** Phase 4 retains original source bytes, filenames, document IDs, chunk IDs, and PDF page numbers in the local database. Phase 6 resolves request-local labels to these retrieved source locations. Phase 8 assigns upload hashes and PDF page/region or standalone-image coordinates to returned visual observations without storing those interpretations. Phase 9A.1 on this branch persists bounded source regions for indexed PDFs; visual interpretations and citations remain planned. Citation resolution does not establish factual entailment.
+**Implementation status:** Phase 4 retains original source bytes, filenames, document IDs, chunk IDs, and PDF page numbers in the local database. Phase 6 resolves request-local labels to these retrieved source locations. Phase 8 assigns upload hashes and PDF page/region or standalone-image coordinates to returned visual observations without storing those interpretations. Phase 9A.1 on `main` persists bounded source regions for indexed PDFs. Phase 9A.2 on this branch adds unverified local interpretations; visual citations remain planned. Citation resolution does not establish factual entailment.
 
 ## AD-05 — Separate evaluation data and security gates
 
@@ -92,4 +92,12 @@ Stable `main` includes Phases 1–6 and 8: text RAG, visual inspection, preview,
 
 **Reason:** A PDF can reuse an image or have overlapping elements; coordinates alone do not identify occurrences. The composite key, verified source hash, and transaction keep evidence attached to the correct document while preserving text chunks and embeddings. On-demand rendering can reuse original bytes without storing duplicate image files.
 
-**Limits:** This branch stores no model interpretations, semantic diagrams, standalone image uploads, visual vectors, or visual citations. Changing extractor version removes the prior active set for that extractor. Native PDF parsing needs process isolation before wider deployment, and collection scoping is not caller authorization.
+**Limits:** Phase 9A.1 stores no model interpretations, semantic diagrams, standalone image uploads, visual vectors, or visual citations. Changing extractor version removes the prior active set for that extractor. Native PDF parsing needs process isolation before wider deployment, and collection scoping is not caller authorization.
+
+## AD-12 — Persist unverified local interpretations separately (Phase 9A.2)
+
+**Decision:** Store each model interpretation in an append-only row linked to the complete visual-element key. Record a versioned predefined task prompt, local model name and `/api/tags` digest, render scale, PNG hash, and bounded structured output. Check the model digest before and after inference. Recheck PDF and element state under short database row locks before insertion. A caller-supplied UUID key makes retries idempotent.
+
+**Reason:** Source geometry and model descriptions have different trust levels. Rendering and inference can be slow, so the final lock must cover only source validation and insertion. Immutable rows preserve interpretation history; source deletion cascades it.
+
+**Status and limits:** Implemented on `feat/local-visual-interpretations` pending review. Ollama's chat API does not atomically bind a response to a digest, leaving a narrow revision-swap race between tag checks. Interpretations are explicitly unverified and are not used by retrieval or answers. Development routes have no caller authorization, and native PDF processing needs stronger isolation before public use.

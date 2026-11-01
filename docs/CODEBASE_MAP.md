@@ -1,6 +1,6 @@
 # Codebase map
 
-This map describes Phases 1–6 and 8 on `main`, plus Phase 9A.1 source metadata persistence on `feat/multimodal-evidence-storage`. Check the linked code when changing behavior; [architecture decisions](ARCHITECTURE_DECISIONS.md) explain the broader direction and [the roadmap](ROADMAP.md) separates later phases.
+This map describes Phases 1–6, 8, and 9A.1 on `main`, plus Phase 9A.2 interpretation persistence on `feat/local-visual-interpretations`. Check the linked code when changing behavior; [architecture decisions](ARCHITECTURE_DECISIONS.md) explain the broader direction and [the roadmap](ROADMAP.md) separates later phases.
 
 ## Entry points and boundaries
 
@@ -51,7 +51,7 @@ flowchart LR
 
 `api/retrieval.py` calls the synchronous service in a threadpool and closes the Ollama provider after each request. The service validates exactly one finite, nonzero query vector and passes its measured model name, digest, and dimensions to the existing store. The store checks **indexed embeddings**, then ranks only materialized, same-dimension, same-model, nonzero candidates in one read-only repeatable-read snapshot; the filter must precede `<=>` because stored vectors may have mixed dimensions. It fetches chunk text only for top ranked IDs. SQL joins and filters include `collection_id`; ties use document/chunk identifiers for deterministic ordering. Results carry filename and PDF page metadata but no raw vectors. The LangChain adapter delegates to the same service rather than searching independently. `evaluation.py` calculates Recall@K, Hit@K, and MRR from actual ranked IDs; the separate nine-document synthetic fixture tests ranking at K=1 and K=3.
 
-Migrations do not run at API startup. `python -m rag_ai.storage status|upgrade|adopt-legacy` invokes the migration runner; version 2 is required by this branch. Existing version-1 and unversioned databases require a verified backup and separately authorized upgrade or adoption. See [database migrations](DATABASE_MIGRATIONS.md).
+Migrations do not run at API startup. `python -m rag_ai.storage status|upgrade|adopt-legacy` invokes the migration runner; version 3 is required by this branch. Existing version-1, version-2, and unversioned databases require a verified backup and separately authorized upgrade or adoption. See [database migrations](DATABASE_MIGRATIONS.md).
 
 ## Trust boundaries and tests
 
@@ -79,8 +79,12 @@ The merged opt-in [`tests/test_local_rag_e2e.py`](../tests/test_local_rag_e2e.py
 
 ## Phase 9A.1 source metadata flow
 
-`api/visual_elements.py` separately gates POST indexing and paginated GET listing for already indexed PDFs. `storage/visual.py` reads and verifies the stored PDF; `documents/visual_elements.py` adapts Phase 8 inspection into strict candidates with normalized displayed-page coordinates and deterministic occurrence IDs. Extraction runs outside the write transaction. The store locks the document row, rechecks source identity, and atomically reconciles one extractor's set. `0002_visual_elements.sql` binds each row to `(collection_id, document_id)` and cascades on deletion. Text chunks, embeddings, model interpretations, and answer contracts are unaffected.
+`api/visual_elements.py` separately gates POST indexing and paginated GET listing for already indexed PDFs. `storage/visual.py` reads and verifies the stored PDF; `documents/visual_elements.py` adapts Phase 8 inspection into strict candidates with normalized displayed-page coordinates and deterministic occurrence IDs. Extraction runs outside the write transaction. The store locks the document row, rechecks source identity, and atomically reconciles one extractor's set. `0002_visual_elements.sql` binds each row to `(collection_id, document_id)` and cascades on deletion. Text chunks, embeddings, and answer contracts are unaffected.
+
+## Phase 9A.2 interpretation flow on this feature branch
+
+`api/interpretations.py` accepts one complete collection/document/element key and predefined vision task under a separate development flag. `storage/interpretations.py` loads the stored element; `storage/visual.py` verifies original PDF identity. `vision/persistence.py` checks displayed-page geometry, reuses `documents/render.py`, hashes the PNG, and calls `vision/ollama.py` with the Phase 8 task prompt. The provider verifies the configured local model digest through `/api/tags` before and after inference. The store then locks and rechecks the document and element before inserting one immutable, unverified interpretation. A UUID request key supports retries; list and retrieve remain collection scoped. No database transaction spans rendering or inference.
 
 ## Planned, not implemented
 
-Cloud providers, visual interpretation persistence, multimodal retrieval and citations, LangGraph workflows, MCP tools, and the React frontend remain roadmap items. Caller/document authorization is also not implemented.
+Cloud providers, multimodal retrieval and citations, LangGraph workflows, MCP tools, and the React frontend remain roadmap items. Caller/document authorization is also not implemented.

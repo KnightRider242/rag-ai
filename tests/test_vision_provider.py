@@ -211,3 +211,54 @@ def test_invalid_input_rejected_before_transport(image: bytes, prompt: str) -> N
         assert error.value.category == "resource_limit"
     finally:
         model.close()
+
+
+def test_verified_digest_wraps_inference() -> None:
+    calls = []
+    digest = "a" * 64
+    def handler(request):
+        calls.append(request.url.path)
+        if request.url.path == "/api/tags":
+            return httpx.Response(200, json={"models": [{"name": "synthetic-vision", "digest": digest}]})
+        return httpx.Response(200, json=body())
+    model = provider(handler)
+    try:
+        output, revision = model.analyze_verified(image=b"image", task_prompt="Describe")
+        assert output.description == "A relay is shown."
+        assert revision == digest
+        assert calls == ["/api/tags", "/api/chat", "/api/tags"]
+    finally:
+        model.close()
+
+
+@pytest.mark.parametrize("tags", [
+    {}, {"models": []}, {"models": [{"name": "other", "digest": "a" * 64}]},
+    {"models": [{"name": "synthetic-vision", "digest": "invalid"}]},
+    {"models": [{"name": "synthetic-vision", "digest": "a" * 64}] * 2},
+    {"models": "wrong"},
+])
+def test_unverifiable_digest_fails_before_chat(tags: dict) -> None:
+    model = provider(lambda request: httpx.Response(200, json=tags) if request.url.path == "/api/tags"
+                     else pytest.fail("chat must not run"))
+    try:
+        with pytest.raises(VisionError):
+            model.analyze_verified(image=b"image", task_prompt="Describe")
+    finally:
+        model.close()
+
+
+def test_digest_change_after_chat_is_rejected() -> None:
+    checks = 0
+    def handler(request):
+        nonlocal checks
+        if request.url.path == "/api/tags":
+            checks += 1
+            return httpx.Response(200, json={"models": [
+                {"name": "synthetic-vision", "digest": ("a" if checks == 1 else "b") * 64}]})
+        return httpx.Response(200, json=body())
+    model = provider(handler)
+    try:
+        with pytest.raises(VisionError, match="changed"):
+            model.analyze_verified(image=b"image", task_prompt="Describe")
+    finally:
+        model.close()

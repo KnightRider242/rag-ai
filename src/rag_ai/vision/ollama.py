@@ -2,6 +2,7 @@
 
 import base64
 import json
+import re
 from typing import Literal
 
 import httpx
@@ -32,6 +33,17 @@ class _ChatResponse(BaseModel):
         return value
 
 
+class _ModelTag(BaseModel):
+    model_config = ConfigDict(extra="ignore", strict=True)
+    name: str
+    digest: str
+
+
+class _TagsResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore", strict=True)
+    models: list[_ModelTag]
+
+
 class OllamaVisionProvider:
     def __init__(self, *, base_url: str, model_name: str,
                  max_response_bytes: int = 16384,
@@ -51,6 +63,40 @@ class OllamaVisionProvider:
 
     def close(self) -> None:
         self._client.close()
+
+    def verified_model_digest(self) -> str:
+        """Resolve the exact configured local model in Ollama's bounded tag list."""
+        try:
+            with self._client.stream("GET", "/api/tags") as response:
+                if 300 <= response.status_code < 400:
+                    raise VisionError("Local model identity could not be verified.", category="transport")
+                response.raise_for_status()
+                body = bytearray()
+                for part in response.iter_bytes(chunk_size=8192):
+                    if len(body) + len(part) > 1_000_000:
+                        raise VisionError("Local model list exceeds its limit.", category="resource_limit")
+                    body.extend(part)
+            tags = _TagsResponse.model_validate_json(body)
+            matches = [tag.digest for tag in tags.models if tag.name == self.model_name]
+            if len(matches) != 1 or re.fullmatch(r"[0-9a-f]{64}", matches[0]) is None:
+                raise VisionError("Local model identity could not be verified.", category="invalid_envelope")
+            return matches[0]
+        except VisionError:
+            raise
+        except httpx.TimeoutException as exc:
+            raise VisionError("Local model identity check timed out.", category="timeout") from exc
+        except httpx.HTTPError as exc:
+            raise VisionError("Local model identity could not be verified.", category="transport") from exc
+        except (ValidationError, ValueError) as exc:
+            raise VisionError("Local model identity could not be verified.", category="invalid_envelope") from exc
+
+    def analyze_verified(self, *, image: bytes, task_prompt: str) -> tuple[VisionOutput, str]:
+        """Check model identity around inference; Ollama has no digest-pinned chat API."""
+        before = self.verified_model_digest()
+        output = self.analyze(image=image, task_prompt=task_prompt)
+        if self.verified_model_digest() != before:
+            raise VisionError("Local model changed during inference.", category="invalid_envelope")
+        return output, before
 
     def analyze(self, *, image: bytes, task_prompt: str) -> VisionOutput:
         if not image or len(image) > 4_000_000 or not task_prompt.strip() or len(task_prompt) > 1000:

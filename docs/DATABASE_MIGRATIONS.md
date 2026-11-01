@@ -64,15 +64,15 @@ The PowerShell byte-stream behavior is documented by [Microsoft](https://learn.m
 
 ## Versioned Phase 4 schema
 
-Versioned migrations make schema changes repeatable while protecting data from an application version that expects a different structure. The runner reads ordered `src/rag_ai/storage/migrations/NNNN_name.sql` files; this feature branch adds `0002_visual_elements.sql` after the unchanged `0001_initial.sql`. `rag_ai_schema_migrations` records each applied version, its SQL SHA-256 checksum, and application time. Checksums detect edits to an applied migration; unknown, missing, or mismatched versions are rejected. Never edit applied migration SQL or manually change this table. This branch's persistence methods require version 2. Migrations never run automatically at API startup or during requests.
+Versioned migrations make schema changes repeatable while protecting data from an application version that expects a different structure. The runner reads ordered `src/rag_ai/storage/migrations/NNNN_name.sql` files; this feature branch adds `0003_visual_interpretations.sql` after unchanged `0001_initial.sql` and `0002_visual_elements.sql`. `rag_ai_schema_migrations` records each applied version, its SQL SHA-256 checksum, and application time. Checksums detect edits to an applied migration; unknown, missing, or mismatched versions are rejected. Never edit applied migration SQL or manually change this table. This branch's persistence methods require version 3. Migrations never run automatically at API startup or during requests.
 
 | Command | Effect | Typical result |
 | --- | --- | --- |
-| `python -m rag_ai.storage status` | Read-only schema/version diagnostic. | `empty`, `unversioned Phase 4 schema`, `partial unversioned schema`, `version 1`, or `version 2`. |
-| `python -m rag_ai.storage upgrade` | **Writes schema state:** transactionally applies pending numbered migrations and records checksums. Safe to rerun on a compatible versioned schema. | `Schema at version 2.` with this branch. Refuses an existing unversioned Phase 4 schema. |
+| `python -m rag_ai.storage status` | Read-only schema/version diagnostic. | `empty`, `unversioned Phase 4 schema`, `partial unversioned schema`, or `version 1`, `2`, or `3`. |
+| `python -m rag_ai.storage upgrade` | **Writes schema state:** transactionally applies pending numbered migrations and records checksums. Safe to rerun on a compatible versioned schema. | `Schema at version 3.` with this branch. Refuses an existing unversioned Phase 4 schema. |
 | `python -m rag_ai.storage adopt-legacy` | **Writes migration history:** verifies the known unversioned Phase 4 shape, then records version 1 without rewriting document tables. | `Adopted legacy schema as version 1.`; refuses partial/incompatible or already-versioned schemas. |
 
-The [2026-10-29 adoption record](SESSION_LOG.md#2026-10-29--postgresql-legacy-schema-adoption) reports that the existing local development database reached **`version 1`** then. This guide has not rechecked its current state. **Do not run this branch's persistence methods against it until a separately approved, backed-up upgrade to version 2.** A version-1 database is preserved by the additive migration; an outdated application refuses persistence through `require_current_schema()`. For an empty, new database, use `status`, then—after authorization—`upgrade`, then `status`. For an unversioned database, obtain operational authorization and a verified backup first, then use this sequence:
+The [2026-10-29 adoption record](SESSION_LOG.md#2026-10-29--postgresql-legacy-schema-adoption) reports that the existing local development database reached **`version 1`** then. This guide has not rechecked its current state. **Do not run this branch's persistence methods against it until a separately approved, backed-up upgrade to version 3.** A version-2 database retains existing text and visual records under the additive migration; an outdated application refuses persistence through `require_current_schema()`. For an empty, new database, use `status`, then—after authorization—`upgrade`, then `status`. For an unversioned database, obtain operational authorization and a verified backup first, then use this sequence:
 
 ```text
 python -m rag_ai.storage status
@@ -81,7 +81,7 @@ python -m rag_ai.storage upgrade
 python -m rag_ai.storage status
 ```
 
-The first `status` must say `unversioned Phase 4 schema` before considering adoption. The runner verifies the supported Phase 4 baseline. Successful `adopt-legacy` records version 1; a separately authorized `upgrade` then applies version 2. A database already at version 1 needs only the separately authorized upgrade. **Do not run `adopt-legacy` or `upgrade` on an existing database without explicit operational authorization and a verified backup.** Do not repeat adoption on a versioned database. `status` alone neither fixes nor proves the physical schema is fully compatible.
+The first `status` must say `unversioned Phase 4 schema` before considering adoption. The runner verifies the supported Phase 4 baseline. Successful `adopt-legacy` records version 1; a separately authorized `upgrade` then applies versions 2 and 3. A database already at version 1 or 2 needs only the separately authorized upgrade. **Do not run `adopt-legacy` or `upgrade` on an existing database without explicit operational authorization and a verified backup.** Do not repeat adoption on a versioned database. `status` alone neither fixes nor proves the physical schema is fully compatible.
 
 ## Troubleshooting without accidental writes
 
