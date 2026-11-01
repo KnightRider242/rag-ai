@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     app_name: str = "RAG-AI API"
     app_env: Literal["development", "test", "production"] = "production"
     enable_document_parse_endpoint: bool = False
+    enable_document_visual_inspection_endpoint: bool = False
     enable_document_index_endpoint: bool = False
     enable_document_retrieval_endpoint: bool = False
     enable_rag_answer_endpoint: bool = False
@@ -63,6 +64,8 @@ class Settings(BaseSettings):
     def validate_runtime_settings(self) -> "Settings":
         if self.app_env == "production" and self.enable_document_parse_endpoint:
             raise ValueError("Document parsing cannot be enabled in production.")
+        if self.app_env == "production" and self.enable_document_visual_inspection_endpoint:
+            raise ValueError("Document visual inspection cannot be enabled in production.")
         if self.app_env == "production" and self.enable_document_index_endpoint:
             raise ValueError("Document indexing cannot be enabled in production.")
         if self.app_env == "production" and self.enable_document_retrieval_endpoint:
