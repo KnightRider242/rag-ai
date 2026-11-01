@@ -40,6 +40,8 @@ def _chunk_id(
     document_id: str, page_number: int | None, chunk_index: int, text: str,
     chunk_size: int, chunk_overlap: int,
 ) -> str:
+    # Canonical JSON keeps page provenance and splitting settings in the ID,
+    # so re-indexing the same bytes with new settings cannot reuse old IDs.
     canonical = json.dumps(
         {
             "version": 1,
@@ -82,6 +84,8 @@ def chunk_document(
     for page_number, source_text in sources:
         if not source_text.strip():
             continue
+        # Split each PDF page independently: a chunk must identify one source
+        # page for later citation resolution.
         remaining_chunks = max_chunks_per_document - len(chunks)
         # The splitter can discard whitespace, but it cannot fit more than
         # chunk_size non-whitespace characters in one chunk. Reject inputs

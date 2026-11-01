@@ -4,7 +4,7 @@
 
 RAG-AI currently accepts PDF, TXT, and Markdown for development-only parsing and chunking. The local path is **upload → extract text → split into chunks → Ollama embeddings → PostgreSQL/pgvector → semantic search → Ollama answer → source citations**. FastAPI's Swagger page is the interactive testing interface; a React frontend is planned, not implemented. These routes are for a trusted machine bound to localhost, not public deployment.
 
-This guide separates the user's **manual Swagger observations** from the prior **Codex automated test run**. The examples use synthetic engineering text, not a real manual or safety specification.
+The E2E regression is merged on stable `main`. This guide separates the user's **manual Swagger observations** from the prior **Codex automated test runs**. The examples use synthetic engineering text, not a real manual or safety specification.
 
 ## Prerequisites and safe startup
 

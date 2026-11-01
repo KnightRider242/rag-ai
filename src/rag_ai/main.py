@@ -17,6 +17,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(title=settings.app_name)
     app.state.settings = settings
     app.include_router(health_router)
+    # Route registration is a local-development guard, not caller or
+    # collection authorization; the server must also bind to loopback.
     if settings.app_env == "development" and settings.enable_document_parse_endpoint:
         app.include_router(documents_router)
         if settings.enable_document_index_endpoint:
