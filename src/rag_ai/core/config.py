@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     enable_document_visual_inspection_endpoint: bool = False
     enable_document_visual_analysis_endpoint: bool = False
     enable_visual_element_storage_endpoint: bool = False
+    enable_visual_interpretation_endpoint: bool = False
     enable_document_index_endpoint: bool = False
     enable_document_retrieval_endpoint: bool = False
     enable_rag_answer_endpoint: bool = False
@@ -75,6 +76,8 @@ class Settings(BaseSettings):
             raise ValueError("Document visual analysis cannot be enabled in production.")
         if self.app_env == "production" and self.enable_visual_element_storage_endpoint:
             raise ValueError("Visual element storage cannot be enabled in production.")
+        if self.app_env == "production" and self.enable_visual_interpretation_endpoint:
+            raise ValueError("Visual interpretation cannot be enabled in production.")
         if self.app_env == "production" and self.enable_document_index_endpoint:
             raise ValueError("Document indexing cannot be enabled in production.")
         if self.app_env == "production" and self.enable_document_retrieval_endpoint:
@@ -89,7 +92,7 @@ class Settings(BaseSettings):
             raise ValueError("EMBEDDING_MODEL must be a nonempty model name.")
         if not self.generation_model.strip() or len(self.generation_model) > 200:
             raise ValueError("GENERATION_MODEL must be a nonempty model name.")
-        if self.enable_document_visual_analysis_endpoint and (
+        if (self.enable_document_visual_analysis_endpoint or self.enable_visual_interpretation_endpoint) and (
             not self.vision_model.strip() or len(self.vision_model) > 200
         ):
             raise ValueError("VISION_MODEL must be nonempty when visual analysis is enabled.")

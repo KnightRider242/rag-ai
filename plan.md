@@ -98,3 +98,10 @@ Branch `feat/semantic-retrieval` starts from merged `main` at `4521f18`. This im
 2. Correct confirmed status and behavior errors in the README, architecture decisions, codebase map, roadmap, developer and testing guides, and security plan. Keep operational instructions and historical results intact.
 3. Review commands, relative links, code fences, and the roadmap diagram; check consistency and avoid changing application source, tests, dependencies, or runtime configuration.
 4. Run documentation and Git checks, inspect the complete working tree, and append only a dated verification note to the session log. Leave all changes unstaged and unpublished; remaining risks are documentation drift and unverified live-service behavior.
+
+# Phase 9A.2 plan
+
+1. Add migration 0003 with bounded, immutable interpretation rows, composite source identity, cascading deletion, and request-key uniqueness. Keep earlier migrations intact.
+2. Add strict local Ollama digest verification and a service that loads a stored element/PDF, checks geometry, renders and hashes the region, runs a versioned task, then rechecks source state under a short database lock before insertion.
+3. Add separately gated development routes and Pydantic response contracts for analyze, list, and retrieve; preserve Phase 8 and 9A.1 routes.
+4. Add focused mocked and disposable PostgreSQL tests, update architecture/roadmap/security docs, and verify focused/full tests, compilation, diff, credentials, and Git state. Risks: Ollama cannot atomically bind a chat response to a digest; native PDF processing still lacks process isolation.
