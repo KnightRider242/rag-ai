@@ -1,6 +1,6 @@
 # RAG-AI development roadmap
 
-This roadmap separates merged code, unmerged branch work, and plans. Phases 1–6, the local PDF-to-answer E2E test, and basic PDF raster inspection are merged on `main`. The current `feat/multimodal-document-understanding` branch extends inspection and adds rendering and local vision analysis. A small `qwen3-vl:4b-instruct` evaluation returned HTTP 200 for 15 requests; its interpretation errors are recorded in the [local testing guide](LOCAL_RAG_TESTING.md#phase-8-visual-testing-on-the-feature-branch). This is not an accuracy benchmark. Later phases remain plans; see [architecture decisions](ARCHITECTURE_DECISIONS.md) and the [security test plan](SECURITY_TEST_PLAN.md).
+This roadmap separates merged code, current branch work, and plans. Phases 1–6 and 8 are merged on `main`. Phase 9A.1 visual metadata persistence is implemented on `feat/multimodal-evidence-storage` pending review. A small Phase 8 `qwen3-vl:4b-instruct` evaluation returned HTTP 200 for 15 requests but exposed interpretation errors; see the [local testing guide](LOCAL_RAG_TESTING.md#phase-8-visual-testing-on-main). It is not an accuracy benchmark.
 
 | Phase | Status | Intended outcome |
 | --- | --- | --- |
@@ -11,8 +11,10 @@ This roadmap separates merged code, unmerged branch work, and plans. Phases 1–
 | 5. Semantic retrieval and evaluation | Complete for local development | Development-only collection-scoped exact cosine search, model compatibility checks, a LangChain adapter, and a separate synthetic evaluation dataset. Caller/document authorization remains unimplemented. |
 | 6. Local text RAG with citations | On `main`; local E2E merged | Generate text answers locally from retrieved evidence and cite traceable source locations; handle insufficient evidence explicitly. |
 | 7. Multi-provider LLM and embedding support | Planned | Add independent embedding and LLM interfaces for local Ollama and explicitly authorized cloud AI providers, with explicit local/cloud processing policies. Confidential data must never fall back to a cloud provider automatically. |
-| 8. Multimodal document understanding | Basic PDF raster inspection merged; extensions implemented on feature branch | Inspect embedded images, vector paths, and heuristic tables; render bounded PDF pages/regions; locally interpret PDF regions and PNG/JPEG files with application-owned provenance. A small local VLM check completed; no OCR guarantee or semantic verification. |
-| 9. Multimodal RAG and visual citations | Planned | Retrieve text and visual evidence and return citations that identify the original visual source. |
+| 8. Multimodal document understanding | Complete for local development on `main` | Inspect embedded images, vector paths, and heuristic tables; render bounded PDF pages/regions; locally interpret PDF regions and PNG/JPEG files with application-owned provenance. No OCR guarantee or semantic verification. |
+| 9A.1. Visual metadata persistence | Implemented on feature branch, pending review | Store and list bounded source occurrences from already indexed PDFs, scoped to collection and document. No model inference. |
+| 9A.2. Visual interpretation persistence | Planned | Explicitly persist local model interpretations with model and prompt provenance. |
+| 9B. Multimodal retrieval and visual citations | Planned | Retrieve text and visual evidence and return citations that identify the original visual source. |
 | 10. LangGraph agentic workflows | Planned | Add bounded, observable workflows only where they improve a defined user task; enforce tool and data permissions. |
 | 11. MCP tool integration | Planned | Expose or consume approved tools through MCP with explicit scopes, validation, and audit controls. |
 | 12. React frontend | Planned | Build a user interface for authorized document and answer workflows, including citation inspection. |
@@ -28,7 +30,7 @@ This roadmap separates merged code, unmerged branch work, and plans. Phases 1–
 - Add functional and security tests for each new attack surface. Do not treat a completed phase or passing tests as a production security approval.
 - Add automated Windows, macOS, and Linux test coverage as integrations arrive. Keep development fixtures separate from evaluation datasets and record platform-specific limitations rather than assuming parity.
 
-Phase 6 adds single-turn local answers from retrieved text with application-resolved citations and explicit abstention. Phase 8 visual processing is separate from text-RAG and has no persistent visual indexing or visual citations; those belong to Phase 9. Agents, MCP integration, and a frontend remain planned. Public document access remains blocked by missing authentication, authorization, ingress limits, and stronger resource isolation.
+Phase 6 adds single-turn local answers from retrieved text with application-resolved citations and explicit abstention. Phase 8 visual processing remains separate from text-RAG. Phase 9A.1 persists source metadata only; model interpretation storage and visual retrieval/citations remain future work. Public document access remains blocked by missing authentication, authorization, ingress limits, and stronger resource isolation.
 
 The merged PDF-to-answer path has a reproducible [manual and automated test](LOCAL_RAG_TESTING.md). Hardware-aware installation, Docker/Podman support, cross-platform packaging, and release documentation remain future requirements; the local E2E test does not establish them.
 
@@ -82,4 +84,4 @@ flowchart TB
 
 All document routes are for trusted localhost development. Collection filtering and model compatibility protect search correctness; they do not authenticate callers. The LangChain adapter delegates to the same retrieval service. RAGService also reuses that service, then sends bounded evidence to local Ollama and resolves cited labels against retrieved chunks; citation validity alone does not prove factual support.
 
-The Phase 8 feature branch has two analysis inputs: **PDF upload → bounded page/region render → local Ollama vision** and **PNG/JPEG upload → bounded image validation → local Ollama vision**. Both return a validated description with application-owned source and location metadata. PDF inspection is a separate, model-free route. None of these outputs feed the PostgreSQL index or text-RAG answer endpoint. ZIP/bulk ingestion is a separate future capability.
+Phase 8 has two analysis inputs: **PDF upload → bounded page/region render → local Ollama vision** and **PNG/JPEG upload → bounded image validation → local Ollama vision**. Phase 9A.1 separately takes an indexed PDF from PostgreSQL, verifies its bytes, extracts bounded visual metadata, and replaces its visual-element set transactionally. Neither path feeds the text-RAG answer endpoint. ZIP/bulk ingestion is a separate future capability.

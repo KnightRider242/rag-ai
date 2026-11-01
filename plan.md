@@ -1,5 +1,13 @@
 # Phase 5 semantic retrieval plan
 
+## Phase 9A.1 visual-element persistence (approved, 2026-11-01)
+
+1. Add `0002_visual_elements.sql` with composite document ownership, constrained displayed-page geometry, provenance, and cascade deletion. Keep `0001` unchanged; update migration tests for fresh and version-1 disposable schemas.
+2. Adapt the bounded Phase 8 PDF inspection result into strict, deterministic raster, table, and vector-path candidates. Normalize coordinates once for both SHA-256 identity and persistence; keep existing Phase 8 responses unchanged.
+3. Add a focused visual store with source-hash checks, document-row locking, atomic extractor-set replacement, and collection-scoped listing. Add separately gated development POST/GET routes and synthetic API/storage/security tests.
+4. Update current-facing README and developer, architecture, migration, roadmap, testing, and security docs; append the session log. Phase 9A.2 interpretation and Phase 9B retrieval remain future work.
+5. Verify compilation, focused and full default tests, and PostgreSQL tests only after verifying the exact disposable destination. Review whitespace, links, secrets, Git status, and the full diff; leave all changes uncommitted. Risks: PostgreSQL numeric special values, expensive native PDF parsing, concurrent replacement, and unauthenticated development routes.
+
 Branch `feat/semantic-retrieval` starts from merged `main` at `4521f18`. This implementation scope is already approved; commit, push, PR, merge, and non-test database changes are not.
 
 1. Add a small typed retrieval service and LangChain Core adapter. Validate query length, `top_k`, one finite nonzero embedding, and provider model metadata without coupling the service to FastAPI or psycopg.

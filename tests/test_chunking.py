@@ -238,7 +238,7 @@ def test_chunk_route_disabled_by_default(monkeypatch: pytest.MonkeyPatch) -> Non
 
 
 def test_chunk_route_unavailable_in_production() -> None:
-    settings = Settings(app_env="production", enable_document_parse_endpoint=False)
+    settings = Settings(app_env="production", enable_document_parse_endpoint=False, _env_file=None)
 
     assert "/documents/chunk" not in create_app(settings).openapi()["paths"]
     assert post_chunk(settings, "notes.txt", b"hello", "text/plain").status_code == 404

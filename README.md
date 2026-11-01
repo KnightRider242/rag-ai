@@ -1,6 +1,6 @@
 # RAG-AI
 
-RAG-AI is a Python API for extracting documents, indexing text with local embeddings, searching PostgreSQL/pgvector, and generating single-turn answers with source citations. These text features and basic PDF raster inspection are merged on `main` and require explicit development flags. The current feature branch extends PDF inspection and adds page rendering and local visual analysis; it has not been merged. The React client remains planned.
+RAG-AI is a Python API for extracting documents, indexing text with local embeddings, searching PostgreSQL/pgvector, and generating single-turn answers with source citations. Phase 8 PDF inspection, rendering, and local visual analysis are merged on `main`. This feature branch adds persistence for bounded visual metadata from already indexed PDFs. Routes require explicit development flags; the React client remains planned.
 
 ## Requirements
 
@@ -153,9 +153,9 @@ The response has `collection_id`, `status` (`answered` or `insufficient_evidence
 
 `GENERATION_MODEL`, `GENERATION_NUM_CTX`, `GENERATION_NUM_PREDICT`, `GENERATION_TEMPERATURE`, `GENERATION_MAX_RESPONSE_BYTES`, `RAG_MAX_CHUNKS`, `RAG_MAX_CHUNK_CHARACTERS`, and `RAG_MAX_CONTEXT_CHARACTERS` are server settings in `.env.example`. Generation uses local Ollama `/api/chat` with JSON-schema output. There is no cloud fallback, tools, streaming, conversation history, or LangChain answer chain.
 
-## Local visual inspection (Phase 8 feature branch)
+## Local visual inspection and metadata persistence
 
-Stable `main` has a development-only route for PDF raster occurrence metadata. On `feat/multimodal-document-understanding`, inspection also reports vector paths and heuristic tables; new routes render one PDF page or region as PNG and submit a bounded PDF region or PNG/JPEG image to a configured **local** Ollama vision model. Structured descriptions are model observations with application-owned source IDs and coordinates, not verified facts or text-RAG citations. No vision model is selected by default. See [local testing](docs/LOCAL_RAG_TESTING.md#phase-8-visual-testing-on-the-feature-branch) and the [codebase map](docs/CODEBASE_MAP.md#phase-8-visual-flow-on-the-feature-branch).
+Phase 8 inspection reports raster occurrences, vector paths, and heuristic tables; its preview and analysis routes remain unchanged. Structured vision descriptions are model observations, not verified facts or text-RAG citations. On this branch, set `APP_ENV=development` and `ENABLE_VISUAL_ELEMENT_STORAGE_ENDPOINT=true` to register `POST /collections/{collection_id}/documents/{document_id}/visual-elements/index` and `GET /collections/{collection_id}/documents/{document_id}/visual-elements`. First index a text-bearing PDF through the existing document route, then use its returned SHA-256 `document_id`. POST persists bounded source metadata from the stored PDF; GET lists at most 100 records per page using `limit` and `offset`, without returning original bytes. An explicit version-2 database upgrade is required before using the new code; follow the [backup and migration guide](docs/DATABASE_MIGRATIONS.md). The collection UUID is not an access credential. Phase 9A.2 interpretation persistence and Phase 9B retrieval are future work. See [local testing](docs/LOCAL_RAG_TESTING.md#phase-8-visual-testing-on-main) and the [codebase map](docs/CODEBASE_MAP.md#phase-8-visual-flow-on-main).
 
 A recorded local evaluation with `qwen3-vl:4b-instruct` made 15 vision API requests: all returned HTTP 200 with valid structured visual evidence, and none reached the generation limit. Successful requests did not establish visual accuracy. The model misread “Ollama provider” as “Qlana provider” and claimed five fields on a scanned page containing four. This small check is not a comprehensive benchmark. The Phase 8 routes remain for trusted localhost development without caller or document authorization; native PDF/image processing needs stronger isolation before public use.
 
@@ -165,7 +165,7 @@ A recorded local evaluation with `qwen3-vl:4b-instruct` made 15 vision API reque
 python -m pytest
 ```
 
-The default suite covers routes, document processing, and mocked provider behavior without a database or running Ollama. `/health` checks API process liveness, not database readiness. The most recent default run recorded **341 passed, 25 skipped**; the focused Phase 8 suite recorded **125 passed**. Both reported 13 nonfatal LangSmith deprecation warnings. See the dated [session log](docs/SESSION_LOG.md) for the run context.
+The default suite covers routes, document processing, and mocked provider behavior without a database or running Ollama. `/health` checks API process liveness, not database readiness. On this branch, the default suite passed **345 tests with 37 opt-in skips**; the PostgreSQL-enabled suite passed **377 with 5 live-Ollama skips** in a verified disposable container. See the dated [session log](docs/SESSION_LOG.md) for the run context.
 
 The default suite skips the real database/Ollama tests. To run PostgreSQL integration tests, start the Compose database and set `RAG_AI_TEST_DATABASE_URL` to a **dedicated local test database URL** with the `vector` extension installed and schema-creation permission. Set `RAG_AI_RUN_OLLAMA_TESTS=1` as well to run local Ollama indexing, semantic evaluation, and Phase 6 cited-answer evaluation with `embeddinggemma:300m` and `qwen3:4b-instruct`. Then run `python -m pytest -q`. Tests use synthetic documents in disposable, randomly named schemas and remove those schemas afterward. Never use a database containing real documents for destructive integration tests. Windows and macOS runtime checks remain outstanding.
 
@@ -175,11 +175,11 @@ Earlier live PostgreSQL/Ollama runs and manual Swagger checks are recorded in th
 
 ## Configuration
 
-The application reads environment variables and optionally `.env` from the working directory. `APP_NAME` changes the OpenAPI title. `APP_ENV` and the `ENABLE_*_ENDPOINT` flags in [`.env.example`](.env.example) control development route registration, including separate visual inspection and analysis flags on this branch. `VISION_MODEL` must be set before enabling analysis; it defaults to empty even if a vision model is installed locally. `DATABASE_URL` is used by indexing, retrieval, answers, and explicit migration commands. Docker Compose reads `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, and optionally `POSTGRES_PORT` from `.env`. Keep credentials in the ignored `.env` or a secret store.
+The application reads environment variables and optionally `.env` from the working directory. `APP_NAME` changes the OpenAPI title. `APP_ENV` and the `ENABLE_*_ENDPOINT` flags in [`.env.example`](.env.example) control development route registration, including separate visual inspection, analysis, and storage flags. `VISION_MODEL` must be set before enabling analysis; it defaults to empty even if a vision model is installed locally. `DATABASE_URL` is used by indexing, retrieval, answers, visual storage, and explicit migration commands. Docker Compose reads `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, and optionally `POSTGRES_PORT` from `.env`. Keep credentials in the ignored `.env` or a secret store.
 
 ## Roadmap
 
-Phases 1–6 and basic PDF raster inspection are merged on stable `main`; the Phase 8 extensions are under review on this branch. Cloud-provider choice, persistent multimodal evidence, LangGraph workflows, MCP tools, a React frontend, and deployment hardening remain planned. Local inference can use a CPU; [GPU acceleration](https://docs.ollama.com/gpu) depends on the host and Ollama support. See the [roadmap](docs/ROADMAP.md) and [architecture decisions](docs/ARCHITECTURE_DECISIONS.md).
+Phases 1–6 and 8 are merged on stable `main`. Phase 9A.1 visual metadata persistence is on this branch; interpretation persistence, multimodal retrieval, cloud-provider choice, LangGraph workflows, MCP tools, a React frontend, and deployment hardening remain planned. Local inference can use a CPU; [GPU acceleration](https://docs.ollama.com/gpu) depends on the host and Ollama support. See the [roadmap](docs/ROADMAP.md) and [architecture decisions](docs/ARCHITECTURE_DECISIONS.md).
 
 ## Layout
 
@@ -192,7 +192,7 @@ src/rag_ai/storage/   Collection-scoped PostgreSQL/pgvector indexing
 src/rag_ai/retrieval/ Typed search, LangChain adapter, and evaluation metrics
 src/rag_ai/generation/ Local Ollama structured generation boundary
 src/rag_ai/rag/       Bounded context, prompts, and citation resolution
-src/rag_ai/vision/    Feature-branch local visual interpretation and provenance
+src/rag_ai/vision/    Local visual interpretation and provenance
 src/rag_ai/main.py    FastAPI application factory and entry point
 tests/               API tests
 docker/postgres/      Database initialization script

@@ -328,22 +328,23 @@ def test_index_rejects_nonfinite_vectors_from_any_provider_before_storage() -> N
 def test_index_route_is_disabled_by_default_and_in_production() -> None:
     assert "/collections/{collection_id}/documents/index" not in create_app(Settings(_env_file=None)).openapi()["paths"]
     assert "/collections/{collection_id}/documents/index" not in create_app(
-        Settings(app_env="production", enable_document_index_endpoint=False)
+        Settings(app_env="production", enable_document_index_endpoint=False, _env_file=None)
     ).openapi()["paths"]
 
 
 def test_index_route_requires_both_development_flags() -> None:
-    settings = Settings(app_env="development", enable_document_index_endpoint=True)
+    settings = Settings(app_env="development", enable_document_parse_endpoint=False,
+                        enable_document_index_endpoint=True, _env_file=None)
     assert "/collections/{collection_id}/documents/index" not in create_app(settings).openapi()["paths"]
 
     settings = Settings(app_env="development", enable_document_parse_endpoint=True,
-                        enable_document_index_endpoint=True)
+                        enable_document_index_endpoint=True, _env_file=None)
     assert "/collections/{collection_id}/documents/index" in create_app(settings).openapi()["paths"]
 
 
 def test_production_cannot_enable_index_route() -> None:
     with pytest.raises(ValidationError, match="Document indexing cannot be enabled in production"):
-        Settings(app_env="production", enable_document_index_endpoint=True)
+        Settings(app_env="production", enable_document_index_endpoint=True, _env_file=None)
 
 
 def test_index_route_reports_missing_database_without_upload_processing() -> None:
