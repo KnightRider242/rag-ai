@@ -2,9 +2,9 @@
 
 These decisions describe the approved direction as of 2026-10-28. They guide future work; they do not imply that planned integrations exist. Revisit a decision on its feature branch if implementation evidence warrants a change, and record the reason.
 
-## Current baseline (Phases 1–6 feature branch)
+## Current baseline (stable `main` and Phase 8 feature branch)
 
-The FastAPI backend exposes `/health` and, with explicit development configuration, `/documents/parse`, `/documents/chunk`, `/collections/{collection_id}/documents/index`, `/collections/{collection_id}/search`, and `/collections/{collection_id}/answer`. PDF, TXT, and Markdown extraction, LangChain text splitting, local Ollama embeddings and generation, PostgreSQL/pgvector persistence, exact semantic search, and single-turn cited answers are implemented on this branch. Development routes have no authentication or collection authorization and are restricted to trusted localhost use. There is no cloud provider, vision model, agent, MCP tool, or frontend.
+Stable `main` exposes `/health` and, with explicit development configuration, `/documents/parse`, `/documents/chunk`, `/documents/inspect` for PDF raster metadata, `/collections/{collection_id}/documents/index`, `/collections/{collection_id}/search`, and `/collections/{collection_id}/answer`. PDF, TXT, and Markdown extraction, LangChain text splitting, local Ollama embeddings and generation, PostgreSQL/pgvector persistence, exact semantic search, and single-turn cited answers are implemented there. The Phase 8 feature branch extends inspection and adds preview and local vision analysis routes. Development routes have no authentication or collection authorization and are restricted to trusted localhost use. There is no cloud provider, agent, MCP tool, or frontend.
 
 ## AD-01 — Local-first and explicit processing location
 
@@ -12,7 +12,7 @@ The FastAPI backend exposes `/health` and, with explicit development configurati
 
 **Reason:** Processing location affects confidentiality and data-handling obligations. A local-first path keeps early integration tests independent of external credentials and services.
 
-**Implementation status:** Phases 4 and 6 implement loopback-only Ollama embedding and generation providers with no cloud fallback. General data-classification policy and cloud-provider authorization are not implemented.
+**Implementation status:** Phases 4 and 6 implement loopback-only Ollama embedding and generation providers; the Phase 8 branch adds a loopback-only vision provider. None automatically falls back to a cloud service. General data-classification policy and cloud-provider authorization are not implemented.
 
 ## AD-02 — Provider-independent capabilities
 
@@ -20,7 +20,7 @@ The FastAPI backend exposes `/health` and, with explicit development configurati
 
 **Reason:** Provider changes should not alter document ownership, provenance, or authorization behavior.
 
-**Implementation status:** Small embedding and generation provider interfaces and local Ollama implementations exist. The VLM interface remains planned for Phase 8; multiple provider implementations remain planned for Phase 7.
+**Implementation status:** Small embedding and generation provider interfaces and local Ollama implementations exist on stable `main`. The Phase 8 feature branch adds a separate local VLM interface. A small local `qwen3-vl:4b-instruct` evaluation completed 15 HTTP 200 requests without generation-limit failures; it also exposed visual-reading errors and does not establish general accuracy. Multiple provider implementations remain outside stable `main`.
 
 ## AD-03 — Collection-scoped persistence and vector compatibility
 
@@ -36,7 +36,7 @@ The FastAPI backend exposes `/health` and, with explicit development configurati
 
 **Reason:** Answers need verifiable evidence, and later multimodal features need source provenance.
 
-**Implementation status:** Phase 4 retains original source bytes, filenames, document IDs, chunk IDs, and PDF page numbers in the local database. Phase 6 resolves request-local labels to these retrieved source locations. Visual provenance remains planned for Phases 8–9; citation resolution does not establish factual entailment.
+**Implementation status:** Phase 4 retains original source bytes, filenames, document IDs, chunk IDs, and PDF page numbers in the local database. Phase 6 resolves request-local labels to these retrieved source locations. On the Phase 8 branch, the application assigns upload hashes and PDF page/region or standalone-image coordinates to returned visual observations; it does not persist them. Persistent visual evidence and visual citations remain planned for Phase 9. Citation resolution does not establish factual entailment.
 
 ## AD-05 — Separate evaluation data and security gates
 
@@ -77,3 +77,11 @@ The FastAPI backend exposes `/health` and, with explicit development configurati
 **Reason:** This retains Phase 5 collection/model protections while making prompt size, provider access, citation provenance, and abstention independently testable. A separate generation interface leaves room for later approved provider choices without a speculative routing framework.
 
 **Implementation status:** Phase 6 implements single-turn local Qwen3 generation behind a separate development flag. Citation validation checks references, not whether claims are entailed by evidence. Prompt injection, insufficient evidence, and factual grounding remain model-behavior risks; public access is blocked by missing caller and collection authorization.
+
+## AD-10 — Separate bounded visual evidence from text RAG (Phase 8 feature branch)
+
+**Decision:** Use PyMuPDF for deterministic raster occurrence, vector-path, heuristic table, and page/region rendering metadata. Keep PDF boxes in displayed-page points and standalone-image boxes in native pixels. A small loopback-only Ollama vision provider returns validated descriptions. The application, not the model, assigns SHA-256 source identity, filename, page, and region. Keep these visual observations out of PostgreSQL indexing and text-RAG citations until a separately designed Phase 9.
+
+**Reason:** Detection, cell extraction, model interpretation, and source provenance have different trust levels. One bounded region and a structured response limit the data and work per request. The split permits source checks without treating model descriptions as verified facts.
+
+**Status and limits:** Implemented on `feat/multimodal-document-understanding` with synthetic and mocked tests. The vision provider rejects missing or non-boolean completion flags, non-`stop` completion reasons, invalid structured output, redirects, and oversized responses; it closes the HTTP client after each request. This checks the response contract, not whether a description is true. A later small local check of `RAG_AI_Phase8_Visual_Test.pdf` using `qwen3-vl:4b-instruct` returned HTTP 200 for all 15 requests, with no generation-limit failures. In one crop it misread “Ollama provider” as “Qlana provider”; it also reported five fields where the scanned page contained four. These observations are not general accuracy metrics. PyMuPDF table finding is heuristic, path counts are not diagram counts, scanned PDFs have no deterministic OCR, and native PDF/image processing still needs process-level isolation before public use.

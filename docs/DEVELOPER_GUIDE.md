@@ -1,6 +1,6 @@
 # Developer guide: learn the current RAG-AI pipeline
 
-RAG-AI accepts PDF, plain-text, and Markdown uploads for development-only parsing and chunking. Separate development flags enable local Ollama indexing in PostgreSQL/pgvector, semantic search, and single-turn cited answers. Follow the [README](../README.md) for setup and the [codebase map](CODEBASE_MAP.md) for a compact module index.
+RAG-AI accepts PDF, plain-text, and Markdown uploads for development-only parsing and chunking. Separate development flags enable local Ollama indexing in PostgreSQL/pgvector, semantic search, and single-turn cited answers. Basic PDF raster inspection is merged on `main`; this branch adds vector/table inspection, preview, and local vision analysis. Follow the [README](../README.md) for setup and the [codebase map](CODEBASE_MAP.md) for a module index.
 
 ## Follow one document through the code
 
@@ -41,7 +41,11 @@ The merged [local PDF-to-answer verification](LOCAL_RAG_TESTING.md) calls the re
 
 The architecture favors a small provider interface, collection-scoped keys, explicit migrations, and local-only inference so each boundary can be reasoned about separately. These choices do not provide production access control. The development routes lack authentication and collection authorization, and public exposure is prohibited. See the [security test plan](SECURITY_TEST_PLAN.md) for current limits and future requirements.
 
-## Study each new feature
+## Phase 8 visual processing on this feature branch
+
+Start with `api/visual.py` and `documents/visual.py`: inspection distinguishes embedded raster occurrences, vector paths, and PyMuPDF-detected tables. These are metadata or extracted cells, not visual interpretation. `documents/render.py` turns one displayed PDF page/region into a bounded PNG. `api/vision.py` delegates that PNG, or a verified standalone PNG/JPEG, to `vision/ollama.py`; `vision/evidence.py` attaches the upload hash, filename, page, and region after the model responds. The model supplies only description, observations, and limitations. PDF coordinates are displayed-page points; image coordinates are native pixels. See [local visual testing](LOCAL_RAG_TESTING.md#phase-8-visual-testing-on-the-feature-branch) for Swagger and synthetic checks.
+
+When debugging, check route flags and PDF/image validation first (HTTP 4xx), then page/region limits, then local Ollama model availability and response validity (502). Internal logs record a fixed category for HTTP status, transport, timeout, or response-validation failures; public errors remain generic. A table missed by `find_tables()` is a detection limit; an invented object in a description is a model-grounding failure. Neither becomes a text-RAG citation. Run `python -m pytest -q tests/test_visual_inspection.py tests/test_visual_structure.py tests/test_vision_provider.py tests/test_multimodal_api.py` for synthetic and mocked checks. A later 15-request local check with `qwen3-vl:4b-instruct` returned HTTP 200 throughout but misread a small label and overcounted fields, so live success does not prove visual accuracy.
 
 Before implementation, describe the user behavior, learning goal, alternatives, and trust boundaries. After implementation, trace one input through the changed modules, read the relevant tests, run the smallest meaningful check, and explain a failure path and a design trade-off in your own words. Record significant decisions in [architecture decisions](ARCHITECTURE_DECISIONS.md), keeping planned behavior separate from code that exists.
 

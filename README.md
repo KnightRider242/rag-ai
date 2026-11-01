@@ -1,11 +1,12 @@
 # RAG-AI
 
-RAG-AI is an enterprise knowledge assistant under development. The Python API supports document extraction, chunking, local pgvector indexing, semantic retrieval, and single-turn cited answers behind development-only gates. The React client remains planned.
+RAG-AI is a Python API for extracting documents, indexing text with local embeddings, searching PostgreSQL/pgvector, and generating single-turn answers with source citations. These text features and basic PDF raster inspection are merged on `main` and require explicit development flags. The current feature branch extends PDF inspection and adds page rendering and local visual analysis; it has not been merged. The React client remains planned.
 
 ## Requirements
 
 - Python 3.12 or newer
 - Docker with Compose (for the local database)
+- Native [Ollama](https://ollama.com/download) for optional embedding, answer, and visual analysis routes
 
 ## Local setup
 
@@ -46,7 +47,7 @@ RAG-AI is an enterprise knowledge assistant under development. The Python API su
 
 The Python backend targets Windows, macOS, and Linux. On Windows PowerShell, use `Copy-Item .env.example .env`, `py -3.12 -m venv .venv`, `.venv\Scripts\Activate.ps1`, and `python -m pip install -e '.[dev]'` for steps 1–2; then use the same `docker compose` and `uvicorn` commands. Use an installed Python version 3.12 or newer. These are setup instructions, not a claim that the full test suite has been run on every platform.
 
-## Try RAG-AI Locally
+## Try RAG-AI locally
 
 With the project environment, Docker Compose PostgreSQL/pgvector, and native Ollama installed, enable the four development document/search/answer flags in your existing private `.env`. Start the database, verify the schema with `python -m rag_ai.storage status`, confirm the two local models are installed, and run `uvicorn rag_ai.main:app --reload --host 127.0.0.1 --port 8000`. Open `http://127.0.0.1:8000/docs` to upload a synthetic PDF, inspect parsing/chunks, index into one UUID collection, search, and ask for a cited answer. Keep the same UUID for those operations; it is not an access credential. See [Local RAG Testing](docs/LOCAL_RAG_TESTING.md) for safe setup, a two-page fixture, manual observations, automated verification, and troubleshooting. Manual indexing persists the document in your application database; the E2E test uses a separate disposable schema.
 
@@ -135,7 +136,7 @@ curl -H 'Content-Type: application/json' \
 
 The response contains `collection_id` and ranked `results`. Each result includes `document_id`, `chunk_id`, `chunk_index`, `filename`, `file_type`, `page_number` (null for TXT/MD), `text`, and `cosine_distance` (smaller means closer). No raw vectors are returned. `top_k` defaults to 5 and is limited to 1–20; the trimmed query must contain 1–2000 characters. Invalid input returns 422; incompatible model name, Ollama digest, or dimensions returns 409; Ollama failures return 502; unavailable or unconfigured PostgreSQL returns 503. A collection without indexed embeddings returns an empty list after query embedding. Model identity and dimensions are checked against actual indexed embeddings. Exact pgvector cosine search excludes zero vectors and filters collection/model/digest/dimensions before ranking; ties use stable IDs. The server never falls back to a cloud provider. A LangChain Core `BaseRetriever` adapter delegates to the same retrieval service, with source metadata in each `Document`.
 
-Synthetic retrieval cases in `tests/evaluation/semantic_cases.json` are separate from ordinary examples. Nine one-chunk documents include related topics and distractors; four questions each name one relevant source before retrieval. The test maps those sources to deterministic chunk IDs during indexing, then uses actual ranked IDs to measure Recall@1, Recall@3, Hit@1, Hit@3, and MRR@3. Recall@K is the fraction of expected IDs in the first K results; Hit@K records any hit; MRR@3 averages the inverse rank of the first hit among the first three results, or zero if absent. Preset test expectations require at least three first-rank hits and all four within the top three. On the local `embeddinggemma:300m` run of 2026-10-29, all five measured metrics were **1.0** for this synthetic dataset. This small check is not a general relevance guarantee; results may vary with model revision. There is no similarity cutoff. Collection UUID filtering does not authorize access, and the route must remain localhost-only until real caller and document authorization exists.
+The separate synthetic [retrieval evaluation](docs/DEVELOPER_GUIDE.md#follow-one-document-through-the-code) measures Recall@K, Hit@K, and MRR from ranked chunk IDs. All four labeled sources ranked first in a 2026-10-29 local run; this small result is not a general relevance guarantee. There is no similarity cutoff. Collection UUID filtering does not authorize access.
 
 ## Local answers with citations
 
@@ -152,29 +153,33 @@ The response has `collection_id`, `status` (`answered` or `insufficient_evidence
 
 `GENERATION_MODEL`, `GENERATION_NUM_CTX`, `GENERATION_NUM_PREDICT`, `GENERATION_TEMPERATURE`, `GENERATION_MAX_RESPONSE_BYTES`, `RAG_MAX_CHUNKS`, `RAG_MAX_CHUNK_CHARACTERS`, and `RAG_MAX_CONTEXT_CHARACTERS` are server settings in `.env.example`. Generation uses local Ollama `/api/chat` with JSON-schema output. There is no cloud fallback, tools, streaming, conversation history, or LangChain answer chain.
 
+## Local visual inspection (Phase 8 feature branch)
+
+Stable `main` has a development-only route for PDF raster occurrence metadata. On `feat/multimodal-document-understanding`, inspection also reports vector paths and heuristic tables; new routes render one PDF page or region as PNG and submit a bounded PDF region or PNG/JPEG image to a configured **local** Ollama vision model. Structured descriptions are model observations with application-owned source IDs and coordinates, not verified facts or text-RAG citations. No vision model is selected by default. See [local testing](docs/LOCAL_RAG_TESTING.md#phase-8-visual-testing-on-the-feature-branch) and the [codebase map](docs/CODEBASE_MAP.md#phase-8-visual-flow-on-the-feature-branch).
+
+A recorded local evaluation with `qwen3-vl:4b-instruct` made 15 vision API requests: all returned HTTP 200 with valid structured visual evidence, and none reached the generation limit. Successful requests did not establish visual accuracy. The model misread “Ollama provider” as “Qlana provider” and claimed five fields on a scanned page containing four. This small check is not a comprehensive benchmark. The Phase 8 routes remain for trusted localhost development without caller or document authorization; native PDF/image processing needs stronger isolation before public use.
+
 ## Tests
 
 ```bash
 python -m pytest
 ```
 
-Tests exercise parsing and chunking through the HTTP API without requiring a running database. `/health` reports API process liveness; it does not assert database readiness.
+The default suite covers routes, document processing, and mocked provider behavior without a database or running Ollama. `/health` checks API process liveness, not database readiness. The most recent default run recorded **341 passed, 25 skipped**; the focused Phase 8 suite recorded **125 passed**. Both reported 13 nonfatal LangSmith deprecation warnings. See the dated [session log](docs/SESSION_LOG.md) for the run context.
 
 The default suite skips the real database/Ollama tests. To run PostgreSQL integration tests, start the Compose database and set `RAG_AI_TEST_DATABASE_URL` to a **dedicated local test database URL** with the `vector` extension installed and schema-creation permission. Set `RAG_AI_RUN_OLLAMA_TESTS=1` as well to run local Ollama indexing, semantic evaluation, and Phase 6 cited-answer evaluation with `embeddinggemma:300m` and `qwen3:4b-instruct`. Then run `python -m pytest -q`. Tests use synthetic documents in disposable, randomly named schemas and remove those schemas afterward. Never use a database containing real documents for destructive integration tests. Windows and macOS runtime checks remain outstanding.
 
 `tests/test_local_rag_e2e.py` is an additional opt-in API test. It creates a two-page searchable PDF in memory, then calls the parse, chunk, index, search, and answer routes with `httpx.ASGITransport`. It requires the same two opt-in settings and refuses any test URL outside the local `rag_ai_retrieval_test` database before creating a schema. Run it alone with `python -m pytest -q -s tests/test_local_rag_e2e.py` after setting the test database URL and Ollama flag. The test checks page-specific citations, abstention, and collection filtering; it does not establish production authorization or general answer quality. See the [developer guide](docs/DEVELOPER_GUIDE.md) for failure diagnosis.
 
-In the completed 2026-11-01 local E2E development session, the focused live PDF test passed **1/1**, the destination-preflight tests passed **3/3**, the complete local PostgreSQL/Ollama suite passed **229/229**, and the default suite passed **204** with **25** opt-in skips. Two earlier diagnostic live attempts failed the relay-wording assertion before the synthetic source text was clarified; the assertion was retained. These are historical results, not tests rerun for this documentation update. See the [testing guide](docs/LOCAL_RAG_TESTING.md#automated-end-to-end-test-and-recorded-results) for the exact context.
-
-On 2026-10-29, the expanded evaluation passed 5 tests and the full suite with dedicated PostgreSQL and local Ollama enabled passed **168 tests, 0 failed, 0 skipped**. The previous three-case evaluation and complete suite had passed 3 and 166 tests respectively (user-reported historical runs). These runs emitted 13 Python 3.14 deprecation warnings from the installed `langsmith` dependency. One older orphan `rag_ai_test_*` schema remains in the dedicated test database; it was not deleted. Passing tests do not establish production authorization or retrieval quality beyond the synthetic cases.
+Earlier live PostgreSQL/Ollama runs and manual Swagger checks are recorded in the [local testing guide](docs/LOCAL_RAG_TESTING.md). Their synthetic results do not establish general retrieval or answer quality.
 
 ## Configuration
 
-The application reads environment variables and optionally `.env` from the working directory. `APP_NAME` changes the OpenAPI title. `APP_ENV`, `ENABLE_DOCUMENT_PARSE_ENDPOINT`, `ENABLE_DOCUMENT_INDEX_ENDPOINT`, `ENABLE_DOCUMENT_RETRIEVAL_ENDPOINT`, and `ENABLE_RAG_ANSWER_ENDPOINT` control development route registration. Upload, extraction, chunking, embedding, and generation limits are described above and in `.env.example`. `DATABASE_URL` is used by development indexing/retrieval/answers and explicit migration commands. Docker Compose reads `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, and optionally `POSTGRES_PORT` from `.env`. Use a managed secret store for deployed credentials; do not commit credentials or environment files.
+The application reads environment variables and optionally `.env` from the working directory. `APP_NAME` changes the OpenAPI title. `APP_ENV` and the `ENABLE_*_ENDPOINT` flags in [`.env.example`](.env.example) control development route registration, including separate visual inspection and analysis flags on this branch. `VISION_MODEL` must be set before enabling analysis; it defaults to empty even if a vision model is installed locally. `DATABASE_URL` is used by indexing, retrieval, answers, and explicit migration commands. Docker Compose reads `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, and optionally `POSTGRES_PORT` from `.env`. Keep credentials in the ignored `.env` or a secret store.
 
 ## Roadmap
 
-Phases 1–6 and the local PDF-to-answer E2E regression are merged on stable `main`. Local inference can use a CPU; [GPU acceleration](https://docs.ollama.com/gpu) depends on the host and Ollama support. A separate `feat/pdf-visual-inspection` branch exists for planned Phase 8 work; that branch's existence does not make multimodal processing an implemented capability. Cloud-provider choice, multimodal evidence, LangGraph workflows, MCP tools, a React frontend, and deployment hardening remain future work on stable `main`. See the [full roadmap](docs/ROADMAP.md) and [architecture decisions](docs/ARCHITECTURE_DECISIONS.md).
+Phases 1–6 and basic PDF raster inspection are merged on stable `main`; the Phase 8 extensions are under review on this branch. Cloud-provider choice, persistent multimodal evidence, LangGraph workflows, MCP tools, a React frontend, and deployment hardening remain planned. Local inference can use a CPU; [GPU acceleration](https://docs.ollama.com/gpu) depends on the host and Ollama support. See the [roadmap](docs/ROADMAP.md) and [architecture decisions](docs/ARCHITECTURE_DECISIONS.md).
 
 ## Layout
 
@@ -187,6 +192,7 @@ src/rag_ai/storage/   Collection-scoped PostgreSQL/pgvector indexing
 src/rag_ai/retrieval/ Typed search, LangChain adapter, and evaluation metrics
 src/rag_ai/generation/ Local Ollama structured generation boundary
 src/rag_ai/rag/       Bounded context, prompts, and citation resolution
+src/rag_ai/vision/    Feature-branch local visual interpretation and provenance
 src/rag_ai/main.py    FastAPI application factory and entry point
 tests/               API tests
 docker/postgres/      Database initialization script

@@ -36,6 +36,7 @@ class Settings(BaseSettings):
     app_env: Literal["development", "test", "production"] = "production"
     enable_document_parse_endpoint: bool = False
     enable_document_visual_inspection_endpoint: bool = False
+    enable_document_visual_analysis_endpoint: bool = False
     enable_document_index_endpoint: bool = False
     enable_document_retrieval_endpoint: bool = False
     enable_rag_answer_endpoint: bool = False
@@ -43,6 +44,9 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://127.0.0.1:11434"
     embedding_model: str = "embeddinggemma:300m"
     generation_model: str = "qwen3:4b-instruct"
+    vision_model: str = ""
+    vision_max_response_bytes: int = Field(default=16384, ge=4096, le=65536)
+    vision_max_image_pixels: int = Field(default=4_000_000, ge=1, le=4_000_000)
     generation_num_ctx: int = Field(default=4096, ge=2048, le=8192)
     generation_num_predict: int = Field(default=512, ge=64, le=1024)
     generation_temperature: float = Field(default=0, ge=0, le=1)
@@ -66,6 +70,8 @@ class Settings(BaseSettings):
             raise ValueError("Document parsing cannot be enabled in production.")
         if self.app_env == "production" and self.enable_document_visual_inspection_endpoint:
             raise ValueError("Document visual inspection cannot be enabled in production.")
+        if self.app_env == "production" and self.enable_document_visual_analysis_endpoint:
+            raise ValueError("Document visual analysis cannot be enabled in production.")
         if self.app_env == "production" and self.enable_document_index_endpoint:
             raise ValueError("Document indexing cannot be enabled in production.")
         if self.app_env == "production" and self.enable_document_retrieval_endpoint:
@@ -80,6 +86,10 @@ class Settings(BaseSettings):
             raise ValueError("EMBEDDING_MODEL must be a nonempty model name.")
         if not self.generation_model.strip() or len(self.generation_model) > 200:
             raise ValueError("GENERATION_MODEL must be a nonempty model name.")
+        if self.enable_document_visual_analysis_endpoint and (
+            not self.vision_model.strip() or len(self.vision_model) > 200
+        ):
+            raise ValueError("VISION_MODEL must be nonempty when visual analysis is enabled.")
         if self.rag_max_context_characters < self.rag_max_chunk_characters:
             raise ValueError("RAG_MAX_CONTEXT_CHARACTERS must cover one configured chunk.")
         if self.chunk_overlap > self.chunk_size // 2:

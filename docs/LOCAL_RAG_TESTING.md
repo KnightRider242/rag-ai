@@ -8,7 +8,7 @@ The E2E regression is merged on stable `main`. This guide separates the user's *
 
 ## Prerequisites and safe startup
 
-Use Python 3.12+, the project's existing virtual environment, Docker Compose with PostgreSQL/pgvector, and a native local Ollama installation. Confirm that `embeddinggemma:300m` and `qwen3:4b-instruct` are already installed; this guide does not download models. The application database named by your private `DATABASE_URL` must have a compatible, already-migrated schema. Check out the local RAG branch you intend to test. See the [README setup](../README.md#local-setup) and [database operations guide](DATABASE_MIGRATIONS.md) if prerequisites are missing.
+Use Python 3.12+, the project's existing virtual environment, Docker Compose with PostgreSQL/pgvector, and a native local Ollama installation. Confirm that `embeddinggemma:300m` and `qwen3:4b-instruct` are already installed; this guide does not download models. The application database named by your private `DATABASE_URL` must have a compatible, already-migrated schema. Use stable `main` for the merged text-RAG path or this feature branch for the Phase 8 visual steps below. See the [README setup](../README.md#local-setup) and [database operations guide](DATABASE_MIGRATIONS.md) if prerequisites are missing.
 
 In your existing, Git-ignored `.env`, retain your own `DATABASE_URL`, PostgreSQL role, and password. Do not overwrite that file. Enable only these development routes and local models:
 
@@ -164,6 +164,8 @@ python -m pytest -q
 
 The first command requires the opt-in variables and local services for the live E2E case; its connection-free destination checks run without them. The second command runs the default suite when opt-in variables are unset, or the broader local integration suite when they are set. Do not aim the broader suite at an application database or one containing real documents.
 
+The latest recorded service-free run on this Phase 8 branch passed **341 tests**, skipped **25** opt-in integration cases, and failed none. The focused visual modules passed **125 tests**. Both runs reported 13 nonfatal LangSmith deprecation warnings. These are [previously recorded results](SESSION_LOG.md#2026-11-01--phase-8-independent-review-remediation), not results from following this guide; use the commands above for your own environment.
+
 The **completed Codex development session**, not this documentation session, recorded:
 
 | Test | Passed | Failed | Skipped |
@@ -215,3 +217,44 @@ In the correction session, the focused preflight run passed **15 tests** and des
 The development routes have no caller authentication or collection authorization. They are disabled by default and must remain on trusted localhost; public or shared deployment is unsupported. Indexing into the ordinary application database retains original document bytes, chunks, and vectors until explicit deletion, with no automatic expiry. The E2E fixture cleans up only its own disposable test schema.
 
 These tests do not guarantee factual grounding, security against prompt injection, disconnected-network operation, Windows/macOS runtime behavior, or large-document performance. OCR, multimodal indexing, and a frontend are not implemented. No cloud request was made during local E2E testing; separate cloud-provider development branches are unmerged and are not part of this stable-main local workflow. The [roadmap](ROADMAP.md) lists later work without treating it as current capability.
+
+## Phase 8 visual testing on the feature branch
+
+These steps apply to `feat/multimodal-document-understanding`. Stable `main` already includes `/documents/inspect` for PDF raster metadata; vector/table fields, `/documents/preview`, and visual analysis are branch-only. Keep `uvicorn rag_ai.main:app --reload --host 127.0.0.1 --port 8000` bound to loopback. In your existing private `.env`, set `APP_ENV=development` and `ENABLE_DOCUMENT_VISUAL_INSPECTION_ENDPOINT=true`. `/documents/inspect` and `/documents/preview` then appear at `http://127.0.0.1:8000/docs`. These inspection/preview routes store nothing and do not call Ollama. On this branch, inspection returns a safe filename, original-byte SHA-256 ID, one-based PDF pages, displayed page size/text presence, raster occurrences/boxes, vector path counts/boxes/kinds, and heuristic table cells. Preview returns a PNG for one selected page or region; form fields `page_number` and optional `x0,y0,x1,y1` use displayed-page PDF points. In installed PyMuPDF 1.28.2, `page.get_pixmap(clip=...)` takes those displayed coordinates directly, including on rotated pages; the preview renderer does not derotate the requested box. Image/path metadata from inspection has a separate unrotated-to-displayed transformation. A box may be clipped to the page; wholly off-page raster/vector items count but have no visible box. A vector path is not a diagram, and image-based tables have no deterministic cell extraction.
+
+To make a small synthetic document, save and run this script with the existing PyMuPDF installation:
+
+```python
+import pymupdf
+
+pixel = pymupdf.Pixmap(pymupdf.csRGB, 20, 20, bytes([0, 0, 0] * 400), False)
+with pymupdf.open() as doc:
+    doc.new_page().insert_text((50, 50), "Synthetic engineering text")
+    doc.new_page().insert_image(pymupdf.Rect(50, 50, 150, 150), pixmap=pixel)
+    page = doc.new_page()
+    page.draw_rect(pymupdf.Rect(50, 50, 150, 150))
+    page.draw_line((50, 50), (150, 150))
+    page = doc.new_page()
+    for y in (50, 80, 110):
+        page.draw_line((50, y), (250, y))
+    for x in (50, 150, 250):
+        page.draw_line((x, 50), (x, 110))
+    for text, point in (("Relay", (60, 70)), ("Open", (160, 70)),
+                        ("Pump", (60, 100)), ("On", (160, 100))):
+        page.insert_text(point, text)
+    doc.new_page().insert_image(pymupdf.Rect(50, 50, 150, 150), pixmap=pixel)
+    with open("synthetic_visual.pdf", "wb") as output:
+        output.write(doc.tobytes())
+with open("synthetic_visual.png", "wb") as output:
+    output.write(pixel.tobytes("png"))
+with open("synthetic_visual.jpg", "wb") as output:
+    output.write(pixel.tobytes("jpeg"))
+```
+
+Upload `synthetic_visual.pdf` to **POST `/documents/inspect`**: pages 2 and 5 contain raster occurrences, page 3 has vector paths, page 4 has a bordered table, and page 5 has no extractable text. Upload the same PDF to **POST `/documents/preview`** with `page_number=3`, then with region `x0=40,y0=40,x1=160,y1=160`; compare the returned PNG images. These form inputs select one page and at most one region. Image coordinates returned by `/images/analyze` use native pixels, not PDF points.
+
+For optional local model analysis, run `ollama list` and select a compatible installed vision model. The recorded local check used `qwen3-vl:4b-instruct`; verify its availability on your machine or consult the [official Ollama vision guidance](https://docs.ollama.com/capabilities/vision) before installing a model. This repository does not download one. Set `VISION_MODEL` to the selected installed name and `ENABLE_DOCUMENT_VISUAL_ANALYSIS_ENDPOINT=true` in the private development configuration, then restart the backend. In Swagger, upload the PDF to **POST `/documents/analyze-visual`** with `page_number=3`, `task=describe_diagram`, and optionally the same region. Upload the PNG or JPEG to **POST `/images/analyze`** with `task=describe_figure`. The app renders/validates one image and sends it only to configured loopback Ollama; it returns model-generated description/observations/limitations plus application-owned SHA-256 source, filename, page, and region metadata. A model-generated description can be wrong, and no visual evidence enters PostgreSQL or text-RAG citations in this phase.
+
+The service-free checks are `python -m pytest -q tests/test_visual_inspection.py tests/test_visual_structure.py tests/test_vision_provider.py tests/test_multimodal_api.py`. They use synthetic data and a mocked Ollama HTTP boundary; they do **not** verify live image understanding. If no model is installed, leave analysis disabled. A 404 means a route is disabled, a 4xx means an upload/page/region/limit was rejected, and 502 indicates local Ollama or structured-output failure. No database or cloud service is involved. Public deployment remains prohibited because these routes have no caller authorization and native PDF/image processing still needs stronger isolation.
+
+On 2026-11-01, a separate local-only check used the already installed `qwen3-vl:4b-instruct` and the five-page synthetic `RAG_AI_Phase8_Visual_Test.pdf` through `/documents/analyze-visual`. All 15 requests returned HTTP 200 and valid structured evidence, with no generation-limit failures. They comprised six page/task requests (page 1 diagram and labels, page 2 diagram, page 3 figure, page 4 table, page 5 scanned page), five targeted value checks, one page-1 crop, and three content checks. The six primary requests took 3.81–7.20 seconds each. Against the source PDF, the page-2 sensor → controller → motor and power → controller connections, page-4 table rows, and page-5 inspection values were described correctly in sampled outputs. The tiny **Ollama provider** label in page 1 was omitted in a full-page label request and misread as **Qlana provider** in a crop. On page 5 the model also said there were five labeled fields although the source has four, while reading the four values correctly. Successful HTTP and schema validation therefore do not establish visual-reading accuracy. These observations are from one local model/fixture run, not a general quality benchmark. The API still returns a generic 502 for provider failures; server logs record only a fixed failure category, so check local model availability, output budget, and the relevant mocked tests without logging images or raw model output.
