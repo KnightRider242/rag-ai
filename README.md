@@ -172,13 +172,22 @@ This branch builds on the **unmerged** OpenAI feature branch. Gemini uses the sa
 
 The answer route still retrieves with local Ollama embeddings. The Gemini provider sends only the bounded question/evidence context to Google's fixed HTTPS `generateContent` endpoint, requests one JSON text candidate without tools, and validates completion, model version, and the existing answer contract. `GENERATION_NUM_PREDICT` maps to `maxOutputTokens`; Ollama context/temperature and OpenAI reasoning settings are not forwarded. Google model thinking remains at its documented default. A blocked or malformed response is a provider error, not evidence-based abstention. Citation labels are still resolved by `RAGService`.
 
+### Optional Anthropic generation (Phase 7D dependent feature branch)
+
+This branch depends on the **unmerged** Gemini and OpenAI branches. Anthropic uses the same trusted-localhost answer route, `ENABLE_CLOUD_GENERATION=true`, and server-owned `CLOUD_GENERATION_COLLECTION_IDS` JSON allowlist. Select `GENERATION_PROVIDER=anthropic`, set `ANTHROPIC_GENERATION_MODEL=claude-haiku-5-5`, and supply `ANTHROPIC_API_KEY` privately. Keep `APP_ENV=development` and `ENABLE_RAG_ANSWER_ENDPOINT=true`. A key alone never grants transfer permission; there is no production caller or collection authorization.
+
+The provider sends only bounded question/evidence text to Anthropic's fixed HTTPS Messages API. It uses the top-level `system` prompt, one user message, `max_tokens`, and `output_config.format` JSON schema. No tools, native Anthropic citations, sampling parameters, or automatic fallback are enabled. Adaptive thinking remains at the model default; thinking blocks are never treated as answer text. Only an `end_turn` response with one valid text block becomes a `GeneratedAnswer`. `max_tokens` also covers thinking tokens, so the initial 512-token default may yield a controlled `max_tokens` error; it is configurable up to 1024. `RAGService` alone resolves request-local source labels to citations.
+
 | Provider | Generation | Embeddings | Verification |
 | --- | --- | --- | --- |
 | Ollama (default) | Local | Local Ollama | Live local tests |
 | OpenAI (unmerged parent branch) | Optional cloud | Local Ollama only | Mocked tests; one live HTTP 429, no completed response |
-| Gemini (this branch) | Optional cloud | Local Ollama only | Mocked HTTP tests; no live Google request |
+| Gemini (unmerged parent branch) | Optional cloud | Local Ollama only | Mocked HTTP tests; no live Google request |
+| Anthropic (this branch) | Optional cloud | Local Ollama only | Mocked HTTP tests; no live Anthropic request |
 
 Before approving any actual Google transfer, review the current [Gemini API terms](https://ai.google.dev/gemini-api/terms), [retention controls](https://ai.google.dev/gemini-api/docs/zdr), and [available regions](https://ai.google.dev/gemini-api/docs/available-regions). Free and paid service data handling differs; a local allowlist does not establish regional processing or zero retention. Do not send confidential documents without a separate authorization and policy review.
+
+Before any real Anthropic transfer, review [commercial API retention](https://privacy.claude.com/en/articles/7996866-how-long-do-you-store-my-organization-s-data) and [data-residency controls](https://platform.claude.com/docs/en/manage-claude/data-residency) for the intended account and region. This development configuration does not assert zero retention or regional pinning. No confidential content may be sent without separate authorization and policy review.
 
 ## Tests
 
@@ -204,7 +213,7 @@ The application reads environment variables and optionally `.env` from the worki
 
 ## Roadmap
 
-Phases 1–6, including local cited answers, are merged. This Gemini feature branch depends on the unmerged OpenAI provider branch; both cloud providers require separate review. Local inference can use a CPU; [GPU acceleration](https://docs.ollama.com/gpu) depends on the host and Ollama support. Anthropic, cloud embeddings, multimodal evidence, LangGraph workflows, MCP tools, a React frontend, and deployment hardening remain planned. See the [full roadmap](docs/ROADMAP.md) and [architecture decisions](docs/ARCHITECTURE_DECISIONS.md).
+Phases 1–6, including local cited answers, are merged. This Anthropic feature branch depends on the unmerged Gemini and OpenAI branches; all cloud providers require separate review. Local inference can use a CPU; [GPU acceleration](https://docs.ollama.com/gpu) depends on the host and Ollama support. Cloud embeddings, multimodal evidence, LangGraph workflows, MCP tools, a React frontend, and deployment hardening remain planned. See the [full roadmap](docs/ROADMAP.md) and [architecture decisions](docs/ARCHITECTURE_DECISIONS.md).
 
 ## Layout
 
@@ -215,7 +224,7 @@ src/rag_ai/documents/ Validated extraction and deterministic chunking
 src/rag_ai/embeddings/ Local Ollama provider and embedding boundary
 src/rag_ai/storage/   Collection-scoped PostgreSQL/pgvector indexing
 src/rag_ai/retrieval/ Typed search, LangChain adapter, and evaluation metrics
-src/rag_ai/generation/ Structured local, OpenAI, and Gemini generation providers
+src/rag_ai/generation/ Structured local, OpenAI, Gemini, and Anthropic generation providers
 src/rag_ai/rag/       Bounded context, prompts, and citation resolution
 src/rag_ai/main.py    FastAPI application factory and entry point
 tests/               API tests

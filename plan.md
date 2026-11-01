@@ -34,3 +34,10 @@ Branch `feat/semantic-retrieval` starts from merged `main` at `4521f18`. This im
 2. Extend existing Pydantic settings and the answer-route cloud gate to select Gemini explicitly while retaining Ollama as default and OpenAI unchanged. Reuse collection transfer permission, local retrieval, threadpool execution, citations, and cleanup; no fallback or database/schema changes.
 3. Add synthetic MockTransport provider tests and configuration/API security tests, then run targeted, existing cloud/local regression, and full suites. Use only the verified disposable test database for optional local integration; make no live cloud request.
 4. Update the environment example and only relevant README, architecture, security, roadmap, and learning documentation. Append measured results to the session log; review all diffs, secrets, `git diff --check`, and unresolved data-handling risks. Leave changes uncommitted.
+
+## Phase 7D Anthropic generation (approved)
+
+1. Add an HTTPX Messages API provider for allowlisted `claude-haiku-5-5`, using the fixed HTTPS host, current stable API version, `output_config.format` JSON schema, bounded output, and strict message/stop/content validation. Permit thinking blocks as non-answer metadata; convert only one validated text block to `GeneratedAnswer`.
+2. Extend Pydantic settings and the existing answer-route cloud gate to select Anthropic explicitly, requiring its own secret key and the same development flag and server-owned collection allowlist before retrieval. Keep local Ollama default, existing providers, citations, cleanup, and SQL unchanged.
+3. Add synthetic MockTransport provider and API/security tests, then run Anthropic, all-provider, RAG, default, and safely configured local PostgreSQL/Ollama regression tests. No live cloud requests, new dependencies, migrations, or application database writes.
+4. Update the environment example and relevant README, roadmap, architecture, developer, security, and session documents. Review all changed/untracked files, secrets, links, and `git diff --check`; record actual results and live-verification limits without publishing Git changes.

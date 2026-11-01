@@ -14,6 +14,7 @@ from rag_ai.embeddings.base import EmbeddingBatch, EmbeddingError
 from rag_ai.generation.base import GeneratedAnswer, GenerationError
 from rag_ai.generation.openai import OpenAIGenerationProvider
 from rag_ai.generation.gemini import GeminiGenerationProvider
+from rag_ai.generation.anthropic import AnthropicGenerationProvider
 from rag_ai.main import create_app
 from rag_ai.retrieval.models import RetrievedChunk
 from rag_ai.storage.postgres import ModelNameMismatch, StorageError
@@ -498,3 +499,164 @@ def test_openai_failure_never_falls_back_to_gemini(monkeypatch: pytest.MonkeyPat
         cloud_generation_collection_ids=[collection_id], openai_api_key="synthetic-test-key",
     ), collection_id, {"query": "Synthetic?"})
     assert response.status_code == 502 and gemini_attempts == []
+
+
+def test_anthropic_key_does_not_select_cloud(monkeypatch: pytest.MonkeyPatch) -> None:
+    embedding, generation, store = FakeEmbedding(), FakeGeneration(), FakeStore()
+    _patch(monkeypatch, embedding, generation, store)
+    attempted = []
+    monkeypatch.setattr("rag_ai.api.answers.AnthropicGenerationProvider",
+                        lambda **kwargs: attempted.append("anthropic"))
+    response = _post(_settings(anthropic_api_key="synthetic-test-key"), uuid4(), {"query": "Local?"})
+    assert response.status_code == 200 and generation.calls == 1 and attempted == []
+
+
+@pytest.mark.parametrize("enabled,allowlisted", [(False, True), (True, False)])
+def test_anthropic_denied_before_retrieval_or_cloud_construction(
+    monkeypatch: pytest.MonkeyPatch, enabled: bool, allowlisted: bool,
+) -> None:
+    collection_id = uuid4()
+    attempted = []
+    monkeypatch.setattr("rag_ai.api.answers.OllamaEmbeddingProvider",
+                        lambda **kwargs: attempted.append("retrieval"))
+    monkeypatch.setattr("rag_ai.api.answers.AnthropicGenerationProvider",
+                        lambda **kwargs: attempted.append("anthropic"))
+    response = _post(_settings(
+        generation_provider="anthropic", enable_cloud_generation=enabled,
+        cloud_generation_collection_ids=[collection_id] if allowlisted else [],
+        anthropic_api_key="synthetic-test-key",
+    ), collection_id, {"query": "Synthetic?"})
+    assert response.status_code == 403 and attempted == []
+
+
+@pytest.mark.parametrize("body,expected_status", [
+    ({"status": "answered", "claims": [{"text": "The relay cuts power.", "source_ids": ["S1"]}]}, 200),
+    ({"status": "insufficient_evidence", "claims": []}, 200),
+    ({"status": "answered", "claims": [{"text": "Invented.", "source_ids": ["S99"]}]}, 502),
+])
+def test_anthropic_route_reuses_citations_and_abstention(
+    monkeypatch: pytest.MonkeyPatch, body: dict, expected_status: int,
+) -> None:
+    collection_id = uuid4()
+    requests: list[httpx.Request] = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(200, json={
+            "type": "message", "role": "assistant", "model": "claude-haiku-5-5",
+            "stop_reason": "end_turn", "content": [{"type": "text", "text": json.dumps(body)}],
+        })
+
+    embedding, store = FakeEmbedding(), FakeStore()
+    monkeypatch.setattr("rag_ai.api.answers.OllamaEmbeddingProvider", lambda **kwargs: embedding)
+    monkeypatch.setattr("rag_ai.api.answers.PostgresIndexStore", lambda dsn: store)
+    providers: list[AnthropicGenerationProvider] = []
+
+    def create_anthropic(**kwargs) -> AnthropicGenerationProvider:
+        provider = AnthropicGenerationProvider(transport=httpx.MockTransport(handle), **kwargs)
+        providers.append(provider)
+        return provider
+
+    monkeypatch.setattr("rag_ai.api.answers.AnthropicGenerationProvider", create_anthropic)
+    response = _post(_settings(
+        generation_provider="anthropic", enable_cloud_generation=True,
+        cloud_generation_collection_ids=[collection_id], anthropic_api_key="synthetic-test-key",
+    ), collection_id, {"query": "What cuts power?"})
+    assert response.status_code == expected_status
+    if expected_status == 200 and body["status"] == "answered":
+        assert response.json()["claims"][0]["citations"][0]["chunk_id"] == "chunk-1"
+    elif expected_status == 200:
+        assert response.json()["status"] == "insufficient_evidence" and response.json()["claims"] == []
+    else:
+        assert response.json()["detail"]["code"] == "generation_invalid"
+    assert store.calls[0]["collection_id"] == collection_id
+    assert len(requests) == 1 and providers[0]._client.is_closed and embedding.closed
+
+
+def test_anthropic_empty_retrieval_avoids_cloud_request(monkeypatch: pytest.MonkeyPatch) -> None:
+    collection_id = uuid4()
+    embedding, store = FakeEmbedding(), FakeStore(results=[])
+    generation = FakeGeneration()
+    monkeypatch.setattr("rag_ai.api.answers.OllamaEmbeddingProvider", lambda **kwargs: embedding)
+    monkeypatch.setattr("rag_ai.api.answers.PostgresIndexStore", lambda dsn: store)
+    monkeypatch.setattr("rag_ai.api.answers.AnthropicGenerationProvider", lambda **kwargs: generation)
+    response = _post(_settings(
+        generation_provider="anthropic", enable_cloud_generation=True,
+        cloud_generation_collection_ids=[collection_id], anthropic_api_key="synthetic-test-key",
+    ), collection_id, {"query": "Synthetic?"})
+    assert response.status_code == 200 and response.json()["status"] == "insufficient_evidence"
+    assert generation.calls == 0 and generation.closed and embedding.closed
+
+
+def test_anthropic_configuration_is_independent_and_fail_closed(monkeypatch: pytest.MonkeyPatch) -> None:
+    assert Settings(_env_file=None).generation_provider == "ollama"
+    for other in ("openai", "gemini"):
+        key = {"openai": "openai_api_key", "gemini": "gemini_api_key"}[other]
+        settings = _settings(generation_provider=other, **{key: "synthetic-test-key"})
+        assert not settings.anthropic_api_key or not settings.anthropic_api_key.get_secret_value()
+    with pytest.raises(ValidationError, match="ANTHROPIC_API_KEY is required"):
+        _settings(generation_provider="anthropic", enable_cloud_generation=True,
+                  cloud_generation_collection_ids=[uuid4()])
+    for other_key in ("openai_api_key", "gemini_api_key"):
+        with pytest.raises(ValidationError, match="ANTHROPIC_API_KEY is required"):
+            _settings(generation_provider="anthropic", enable_cloud_generation=True,
+                      cloud_generation_collection_ids=[uuid4()], **{other_key: "synthetic-test-key"})
+    with pytest.raises(ValidationError):
+        _settings(anthropic_generation_model="other")
+    with pytest.raises(ValidationError, match="Cloud generation is available only in development"):
+        Settings(app_env="production", generation_provider="anthropic", _env_file=None)
+    monkeypatch.setenv("CLOUD_GENERATION_COLLECTION_IDS", '["invalid-uuid"]')
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
+
+
+@pytest.mark.parametrize("selected,key_name", [
+    ("ollama", None), ("openai", "openai_api_key"), ("gemini", "gemini_api_key"),
+])
+def test_other_provider_failure_never_selects_anthropic(
+    monkeypatch: pytest.MonkeyPatch, selected: str, key_name: str | None,
+) -> None:
+    class FailingGeneration(FakeGeneration):
+        def generate(self, **kwargs) -> GeneratedAnswer:
+            raise GenerationError("private synthetic outage")
+
+    embedding, generation, store = FakeEmbedding(), FailingGeneration(), FakeStore()
+    monkeypatch.setattr("rag_ai.api.answers.OllamaEmbeddingProvider", lambda **kwargs: embedding)
+    monkeypatch.setattr("rag_ai.api.answers.PostgresIndexStore", lambda dsn: store)
+    monkeypatch.setattr(f"rag_ai.api.answers.{selected.title() if selected != 'openai' else 'OpenAI'}GenerationProvider",
+                        lambda **kwargs: generation)
+    attempted = []
+    monkeypatch.setattr("rag_ai.api.answers.AnthropicGenerationProvider",
+                        lambda **kwargs: attempted.append("anthropic"))
+    collection_id = uuid4()
+    kwargs = {"generation_provider": selected, "enable_cloud_generation": True,
+              "cloud_generation_collection_ids": [collection_id]}
+    if key_name:
+        kwargs[key_name] = "synthetic-test-key"
+    response = _post(_settings(**kwargs), collection_id, {"query": "Synthetic?"})
+    assert response.status_code == 502 and attempted == [] and generation.closed and embedding.closed
+
+
+def test_anthropic_failure_never_falls_back(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture,
+) -> None:
+    class FailingAnthropic(FakeGeneration):
+        def generate(self, **kwargs) -> GeneratedAnswer:
+            raise GenerationError("private synthetic provider detail")
+
+    embedding, generation, store = FakeEmbedding(), FailingAnthropic(), FakeStore()
+    monkeypatch.setattr("rag_ai.api.answers.OllamaEmbeddingProvider", lambda **kwargs: embedding)
+    monkeypatch.setattr("rag_ai.api.answers.PostgresIndexStore", lambda dsn: store)
+    monkeypatch.setattr("rag_ai.api.answers.AnthropicGenerationProvider", lambda **kwargs: generation)
+    attempted = []
+    for name in ("OllamaGenerationProvider", "OpenAIGenerationProvider", "GeminiGenerationProvider"):
+        monkeypatch.setattr(f"rag_ai.api.answers.{name}", lambda **kwargs: attempted.append(name))
+    collection_id = uuid4()
+    with caplog.at_level(logging.INFO):
+        response = _post(_settings(
+            generation_provider="anthropic", enable_cloud_generation=True,
+            cloud_generation_collection_ids=[collection_id], anthropic_api_key="synthetic-test-key",
+        ), collection_id, {"query": "private synthetic question"})
+    assert response.status_code == 502 and attempted == []
+    assert "private synthetic" not in response.text and "private synthetic" not in caplog.text
+    assert generation.closed and embedding.closed

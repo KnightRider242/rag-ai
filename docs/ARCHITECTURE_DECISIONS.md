@@ -2,9 +2,9 @@
 
 These decisions describe the approved direction as of 2026-10-28. They guide future work; they do not imply that planned integrations exist. Revisit a decision on its feature branch if implementation evidence warrants a change, and record the reason.
 
-## Current baseline (merged Phases 1–6 and dependent Phase 7B/7C feature branches)
+## Current baseline (merged Phases 1–6 and dependent Phase 7B–7D feature branches)
 
-The FastAPI backend exposes `/health` and, with explicit development configuration, `/documents/parse`, `/documents/chunk`, `/collections/{collection_id}/documents/index`, `/collections/{collection_id}/search`, and `/collections/{collection_id}/answer`. PDF, TXT, and Markdown extraction, LangChain text splitting, local Ollama embeddings and generation, PostgreSQL/pgvector persistence, exact semantic search, and single-turn cited answers are merged. The unmerged OpenAI parent branch and this dependent Gemini branch add explicitly gated cloud generation; embeddings stay local. Development routes have no authentication or collection authorization and are restricted to trusted localhost use. There is no vision model, agent, MCP tool, or frontend.
+The FastAPI backend exposes `/health` and, with explicit development configuration, `/documents/parse`, `/documents/chunk`, `/collections/{collection_id}/documents/index`, `/collections/{collection_id}/search`, and `/collections/{collection_id}/answer`. PDF, TXT, and Markdown extraction, LangChain text splitting, local Ollama embeddings and generation, PostgreSQL/pgvector persistence, exact semantic search, and single-turn cited answers are merged. The unmerged OpenAI and Gemini parent branches and this dependent Anthropic branch add explicitly gated cloud generation; embeddings stay local. Development routes have no authentication or collection authorization and are restricted to trusted localhost use. There is no vision model, agent, MCP tool, or frontend.
 
 ## AD-01 — Local-first and explicit processing location
 
@@ -12,7 +12,7 @@ The FastAPI backend exposes `/health` and, with explicit development configurati
 
 **Reason:** Processing location affects confidentiality and data-handling obligations. A local-first path keeps early integration tests independent of external credentials and services.
 
-**Implementation status:** Phases 4 and 6 implement loopback-only Ollama embedding and generation with no cloud fallback. Phase 7B adds OpenAI and dependent Phase 7C adds Gemini behind one development-only operator-controlled collection allowlist; general data-classification policy and production caller authorization are not implemented.
+**Implementation status:** Phases 4 and 6 implement loopback-only Ollama embedding and generation with no cloud fallback. Dependent Phase 7B–7D branches add OpenAI, Gemini, and Anthropic behind one development-only operator-controlled collection allowlist; general data-classification policy and production caller authorization are not implemented.
 
 ## AD-02 — Provider-independent capabilities
 
@@ -20,7 +20,7 @@ The FastAPI backend exposes `/health` and, with explicit development configurati
 
 **Reason:** Provider changes should not alter document ownership, provenance, or authorization behavior.
 
-**Implementation status:** Small embedding and generation provider interfaces and local Ollama implementations exist. The dependent Phase 7B/7C branches add OpenAI and Gemini generation implementations; cloud embeddings and the VLM interface remain planned.
+**Implementation status:** Small embedding and generation provider interfaces and local Ollama implementations exist. The dependent Phase 7B–7D branches add OpenAI, Gemini, and Anthropic generation implementations; cloud embeddings and the VLM interface remain planned.
 
 ## AD-03 — Collection-scoped persistence and vector compatibility
 
@@ -92,4 +92,12 @@ The FastAPI backend exposes `/health` and, with explicit development configurati
 
 **Reason:** Provider-specific request and response fields belong at the provider boundary. Reusing the gate and domain contract keeps cloud transfer policy, abstention, and citations consistent without duplicating retrieval or orchestration. The narrow version rule avoids assuming a stable alias must be returned verbatim while rejecting unrelated model families.
 
-**Implementation status:** This dependent feature branch implements Gemini text generation with mocked HTTP tests only. Actual API acceptance, model-version strings, quality, cost, and regional/data-handling behavior remain unverified. Caller authentication and document authorization are still absent, so public/shared deployment remains blocked.
+**Implementation status:** The unmerged Gemini parent branch implements text generation with mocked HTTP tests only. Actual API acceptance, model-version strings, quality, cost, and regional/data-handling behavior remain unverified. Caller authentication and document authorization are still absent, so public/shared deployment remains blocked.
+
+## AD-12 — Anthropic Messages output stays behind the shared answer boundary
+
+**Decision:** Add only `claude-haiku-5-5` through the fixed HTTPS Messages API, using top-level `system`, one user message, `max_tokens`, and `output_config.format` JSON schema. Omit sampling settings, effort, tools, and native citations. Allow thinking blocks as non-answer metadata but require exactly one text block in an assistant `end_turn` message from the configured model. Validate that text with `GeneratedAnswer` and retain application-owned citation resolution in `RAGService`. Reuse the existing development-only cloud flag, collection allowlist, and secret-key gate before retrieval.
+
+**Reason:** Anthropic's response envelope and adaptive thinking differ from OpenAI and Gemini, while the RAG answer and provenance contract does not. Native Anthropic citations are incompatible with JSON structured output and would duplicate the application's request-local source-label mapping. A bounded output budget can end in `max_tokens`, which must fail closed rather than return partial JSON.
+
+**Implementation status:** This dependent branch adds mocked Anthropic Messages support only. The latest documented stable API version is sent, but actual account/model acceptance, response shape, cost, data residency, and quality remain unverified. Public deployment still needs caller and document authorization.

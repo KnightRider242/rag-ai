@@ -12,6 +12,7 @@ from rag_ai.generation.base import GenerationConfig, GenerationError
 from rag_ai.generation.ollama import OllamaGenerationProvider
 from rag_ai.generation.openai import OpenAIGenerationProvider
 from rag_ai.generation.gemini import GeminiGenerationProvider
+from rag_ai.generation.anthropic import AnthropicGenerationProvider
 from rag_ai.rag.context import ContextLimitError, ContextLimits
 from rag_ai.rag.models import AnswerRequest, AnswerResponse
 from rag_ai.rag.service import CitationError, RAGService
@@ -30,17 +31,18 @@ async def answer_collection(
 ) -> AnswerResponse:
     """Retrieve locally, then use only the explicitly authorized generator."""
     settings: Settings = request.app.state.settings
-    if settings.generation_provider in {"openai", "gemini"}:
+    if settings.generation_provider in {"openai", "gemini", "anthropic"}:
         if (
             settings.app_env != "development" or not settings.enable_rag_answer_endpoint
             or not settings.enable_cloud_generation
             or collection_id not in settings.cloud_generation_collection_ids
         ):
             raise HTTPException(status_code=403, detail={"code": "cloud_generation_forbidden"})
-        credential = (
-            settings.openai_api_key if settings.generation_provider == "openai"
-            else settings.gemini_api_key
-        )
+        credential = {
+            "openai": settings.openai_api_key,
+            "gemini": settings.gemini_api_key,
+            "anthropic": settings.anthropic_api_key,
+        }[settings.generation_provider]
         if credential is None or not credential.get_secret_value().strip():
             raise HTTPException(status_code=503, detail={"code": "cloud_generation_unconfigured"})
     if settings.database_url is None:
@@ -60,6 +62,11 @@ async def answer_collection(
                 generation = GeminiGenerationProvider(
                     api_key=settings.gemini_api_key,
                     model_name=settings.gemini_generation_model,
+                )
+            elif settings.generation_provider == "anthropic":
+                generation = AnthropicGenerationProvider(
+                    api_key=settings.anthropic_api_key,
+                    model_name=settings.anthropic_generation_model,
                 )
             else:
                 generation = OllamaGenerationProvider(
