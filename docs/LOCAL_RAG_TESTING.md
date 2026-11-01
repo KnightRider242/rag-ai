@@ -64,6 +64,32 @@ PY
 
 This PDF is a test fixture only. It is not an operational safety instruction.
 
+## Inspect embedded PDF images (Phase 8A.1)
+
+`POST /documents/inspect` is a separate development-only route. In your private `.env`, set `APP_ENV=development` and `ENABLE_DOCUMENT_VISUAL_INSPECTION_ENDPOINT=true`, then start `uvicorn rag_ai.main:app --reload --host 127.0.0.1 --port 8000`. Open `http://127.0.0.1:8000/docs` and upload a PDF to **documents → inspect**. The route is disabled by default and rejected in production; it has no authentication, so keep the server on a trusted localhost machine.
+
+This short script creates two synthetic files in the current directory using the installed PyMuPDF package:
+
+```python
+from pathlib import Path
+import pymupdf
+
+with pymupdf.open() as document:
+    document.new_page().insert_text((72, 72), "Synthetic text-only page")
+    Path("text_only.pdf").write_bytes(document.tobytes())
+
+with pymupdf.open() as document:
+    page = document.new_page()
+    page.insert_text((72, 72), "Synthetic page with image")
+    pixel = pymupdf.Pixmap(pymupdf.csRGB, 1, 1, bytes([0, 0, 0]), False)
+    page.insert_image(pymupdf.Rect(80, 100, 160, 180), pixmap=pixel)
+    Path("with_image.pdf").write_bytes(document.tobytes())
+```
+
+Save it as `make_inspection_pdfs.py` and run `python make_inspection_pdfs.py`. Upload each file in Swagger. Compare `image_count` (0 versus 1) and the second file's `image_bounds`; both report page size and `has_text=true`. The response includes a safe filename, SHA-256 document ID, and one-based page numbers, but no image bytes or document text. The endpoint accepts image-only PDFs too. It rejects malformed or password-protected PDFs, oversize uploads, excessive pages, and more than **100 image occurrences per document**. It detects embedded raster images, not vector drawings or image meaning; it performs no OCR and stores nothing.
+
+Page width, height, and `image_bounds` use **displayed page coordinates in PDF points**, after any page rotation, with the visible page's top-left as `(0, 0)`. PyMuPDF's image boxes start in unrotated coordinates; the inspector transforms them with the page rotation matrix and clips them to the displayed page. A partly off-page occurrence has one clipped visible box. A completely off-page occurrence still contributes to `image_count` but has no entry in `image_bounds`, so the two lengths may differ. Nonfinite or inverted source boxes are rejected. These boxes describe raster image placement only, not the image's meaning, its visible pixels, or vector artwork.
+
 ## Test through FastAPI Swagger
 
 Open [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs). In Swagger, expand each operation, select **Try it out**, supply the values below, and select **Execute**. Generate one collection UUID and reuse it for indexing, search, and answers:

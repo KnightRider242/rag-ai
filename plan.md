@@ -41,3 +41,16 @@ Branch `feat/semantic-retrieval` starts from merged `main` at `4521f18`. This im
 2. In the E2E fixture, reject service/routing overrides and ambiguous URL destinations before any connection; pin an explicit loopback address in the exact DSN passed to the existing disposable-schema fixture. Add connection-free negative and positive tests.
 3. Run focused preflight tests, then the default suite with temporary development-route overrides. Run local integration only after verifying the dedicated database and Ollama; inspect fixture cleanup, changed files, secrets, and `git diff --check`.
 4. Update only the local testing guide, security plan, and append-only session log with actual results and remaining limits. Leave all work uncommitted.
+
+## Phase 8A.1 PDF image detection (approved)
+
+1. Add a small PyMuPDF inspector and typed page/image metadata, reusing existing filename, upload-size, and page-count rules while accepting image-only PDFs.
+2. Register a separate, disabled-by-default development route and reject production opt-in; do not alter the text parser or later RAG stages.
+3. Add synthetic API and domain tests for text, images, page metadata, malformed files, resource limits, and route gating.
+4. Document local Swagger verification, run focused and default tests plus diff/security checks, and append actual results to the session log. Leave the branch uncommitted.
+
+## Phase 8A.1 displayed-coordinate correction (approved)
+
+1. Transform PyMuPDF's unrotated image boxes with each page's rotation matrix, intersect them with the displayed page rectangle, and retain an occurrence count even for fully off-page images.
+2. Add synthetic 0/90/180-degree and clipped/off-page tests, preserving invalid-geometry and image-limit rejection; clarify the response convention in the local guide and security plan.
+3. Run focused/default tests, compilation, diff and Git checks; append actual results to the session log. No database, cloud, Git publication, or Phase 8A.2 work.
