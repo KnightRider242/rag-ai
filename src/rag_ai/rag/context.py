@@ -36,6 +36,8 @@ def build_context(chunks: list[RetrievedChunk], limits: ContextLimits) -> Eviden
             raise ContextLimitError("Retrieved evidence is empty or too large.")
         label = f"S{index}"
         page = str(chunk.page_number) if chunk.page_number is not None else "none"
+        # Quote untrusted filenames and content as data; labels and their
+        # source mapping remain application-owned for this request only.
         section = (
             f"[{label}]\nDocument: {json.dumps(chunk.filename, ensure_ascii=True)}\n"
             f"Page: {page}\nContent (quoted data): {json.dumps(chunk.text, ensure_ascii=True)}"

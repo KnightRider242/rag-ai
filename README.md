@@ -174,7 +174,7 @@ The application reads environment variables and optionally `.env` from the worki
 
 ## Roadmap
 
-Phases 1–6 provide the local backend, ingestion, chunking, Ollama/pgvector indexing, semantic retrieval, and cited answers. The Phase 6 path has also passed a local PDF-to-answer E2E regression on this test branch; human review of this test remains pending. Local inference can use a CPU; [GPU acceleration](https://docs.ollama.com/gpu) depends on the host and Ollama support. Later phases plan explicit cloud-provider choice, multimodal evidence, LangGraph workflows, MCP tools, a React frontend, and deployment hardening. These later capabilities are not implemented on stable `main`. See the [full roadmap](docs/ROADMAP.md) and [architecture decisions](docs/ARCHITECTURE_DECISIONS.md).
+Phases 1–6 and the local PDF-to-answer E2E regression are merged on stable `main`. Local inference can use a CPU; [GPU acceleration](https://docs.ollama.com/gpu) depends on the host and Ollama support. A separate `feat/pdf-visual-inspection` branch exists for planned Phase 8 work; that branch's existence does not make multimodal processing an implemented capability. Cloud-provider choice, multimodal evidence, LangGraph workflows, MCP tools, a React frontend, and deployment hardening remain future work on stable `main`. See the [full roadmap](docs/ROADMAP.md) and [architecture decisions](docs/ARCHITECTURE_DECISIONS.md).
 
 ## Layout
 

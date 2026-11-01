@@ -41,3 +41,10 @@ Branch `feat/semantic-retrieval` starts from merged `main` at `4521f18`. This im
 2. In the E2E fixture, reject service/routing overrides and ambiguous URL destinations before any connection; pin an explicit loopback address in the exact DSN passed to the existing disposable-schema fixture. Add connection-free negative and positive tests.
 3. Run focused preflight tests, then the default suite with temporary development-route overrides. Run local integration only after verifying the dedicated database and Ollama; inspect fixture cleanup, changed files, secrets, and `git diff --check`.
 4. Update only the local testing guide, security plan, and append-only session log with actual results and remaining limits. Leave all work uncommitted.
+
+## Codebase clarity and maintainability pass (approved)
+
+1. Create `docs/codebase-clarity` from clean merged `main`; trace the implemented document, embedding, storage, retrieval, answer, API, and test boundaries against code.
+2. Add only concise comments for non-obvious provenance, resource, transaction, compatibility, and citation invariants. Do not change executable statements or interfaces.
+3. Correct stale merged-E2E status and strengthen `docs/CODEBASE_MAP.md` with a verified PDF-to-answer path, test entry points, and development security boundaries; preserve historical results.
+4. Run source compilation, the default service-free suite if practical, Markdown/link and secret checks, `git diff --check`, and a full diff review. Append actual results to the session log; leave all changes uncommitted.
