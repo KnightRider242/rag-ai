@@ -85,7 +85,7 @@ def test_upgrade_from_version_1_preserves_text_and_vectors(isolated_database_url
         connection.execute("INSERT INTO chunk_embeddings(collection_id, chunk_id, model_name, dimensions, embedding) "
                            "VALUES (%s, %s, 'synthetic-model', 2, '[0.1,0.2]'::vector)",
                            (collection_id, chunk.chunk_id))
-    assert runner.upgrade() == 3
+    assert runner.upgrade() == 4
     with psycopg.connect(isolated_database_url) as connection:
         assert connection.execute("SELECT original_content FROM indexed_documents WHERE collection_id = %s",
                                   (collection_id,)).fetchone() == (source[1],)

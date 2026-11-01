@@ -91,7 +91,7 @@ def test_version_2_upgrade_preserves_visual_source(isolated_database_url: str, m
         assert MigrationRunner(isolated_database_url).upgrade() == 2
         content = _pdf()
         document_id, element_id = _seed(isolated_database_url, uuid4(), content)
-    assert MigrationRunner(isolated_database_url).upgrade() == 3
+    assert MigrationRunner(isolated_database_url).upgrade() == 4
     with psycopg.connect(isolated_database_url) as connection:
         assert connection.execute("SELECT original_content FROM indexed_documents WHERE document_id = %s",
                                   (document_id,)).fetchone() == (content,)
@@ -115,7 +115,7 @@ def test_failed_version_3_upgrade_rolls_back(isolated_database_url: str, monkeyp
     with psycopg.connect(isolated_database_url) as connection:
         assert connection.execute("SELECT count(*) FROM rag_ai_schema_migrations").fetchone() == (2,)
         assert connection.execute("SELECT to_regclass('visual_interpretations')").fetchone() == (None,)
-    assert MigrationRunner(isolated_database_url).upgrade() == 3
+    assert MigrationRunner(isolated_database_url).upgrade() == 4
 
 
 def test_persist_history_retry_scope_and_cascade(isolated_database_url: str, monkeypatch) -> None:

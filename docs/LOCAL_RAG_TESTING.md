@@ -8,7 +8,7 @@ The E2E regression is merged on stable `main`. This guide separates the user's *
 
 ## Prerequisites and safe startup
 
-Use Python 3.12+, the project's existing virtual environment, Docker Compose with PostgreSQL/pgvector, and a native local Ollama installation. Confirm that `embeddinggemma:300m` and `qwen3:4b-instruct` are already installed; this guide does not download models. The application database named by your private `DATABASE_URL` must have a compatible, already-migrated schema. Phases 8 and 9A.1 are merged on `main`; Phase 9A.2 visual interpretation persistence is on this feature branch and requires schema version 3. See the [README setup](../README.md#local-setup) and [database operations guide](DATABASE_MIGRATIONS.md) if prerequisites are missing.
+Use Python 3.12+, the project's existing virtual environment, Docker Compose with PostgreSQL/pgvector, and a native local Ollama installation. Confirm that `embeddinggemma:300m` and `qwen3:4b-instruct` are already installed; this guide does not download models. The application database named by your private `DATABASE_URL` must have a compatible, already-migrated schema. Phases 8, 9A.1, and 9A.2 are merged on `main`; Phase 9B.1 visual text retrieval is on this feature branch and requires schema version 4. See the [README setup](../README.md#local-setup) and [database operations guide](DATABASE_MIGRATIONS.md) if prerequisites are missing.
 
 In your existing, Git-ignored `.env`, retain your own `DATABASE_URL`, PostgreSQL role, and password. Do not overwrite that file. Enable only these development routes and local models:
 

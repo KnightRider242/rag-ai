@@ -1,6 +1,6 @@
 # Codebase map
 
-This map describes Phases 1–6, 8, and 9A.1 on `main`, plus Phase 9A.2 interpretation persistence on `feat/local-visual-interpretations`. Check the linked code when changing behavior; [architecture decisions](ARCHITECTURE_DECISIONS.md) explain the broader direction and [the roadmap](ROADMAP.md) separates later phases.
+This map describes Phases 1–6, 8, 9A.1, and 9A.2 on `main`, plus Phase 9B.1 visual retrieval on `feat/local-visual-retrieval`. Check the linked code when changing behavior; [architecture decisions](ARCHITECTURE_DECISIONS.md) explain the broader direction and [the roadmap](ROADMAP.md) separates later phases.
 
 ## Entry points and boundaries
 
@@ -11,11 +11,11 @@ This map describes Phases 1–6, 8, and 9A.1 on `main`, plus Phase 9A.2 interpre
 | [`src/rag_ai/api/`](../src/rag_ai/api/) | `/health` is process liveness. `documents.py` handles parse/chunk/index uploads, `retrieval.py` handles search, `answers.py` handles cited answers, and Phase 8 `visual.py`/`vision.py` handle inspection, preview, and local analysis. Phase 9A.1 `visual_elements.py` indexes and lists stored source regions. Document access routes are development-only and disabled by default. |
 | [`src/rag_ai/documents/`](../src/rag_ai/documents/) | `parser.py` validates uploads and extracts text; `chunker.py` uses LangChain's `RecursiveCharacterTextSplitter`; `indexer.py` coordinates bounded embedding batches and storage. |
 | [`src/rag_ai/embeddings/`](../src/rag_ai/embeddings/) | `base.py` defines an `EmbeddingProvider` protocol and batch model; `ollama.py` implements local embeddings through Ollama HTTP. |
-| [`src/rag_ai/retrieval/`](../src/rag_ai/retrieval/) | `service.py` embeds and validates one query, `models.py` defines results, `langchain.py` adapts the service to `BaseRetriever`, and `evaluation.py` scores ranked IDs. |
+| [`src/rag_ai/retrieval/`](../src/rag_ai/retrieval/) | `service.py` embeds and validates text queries; `visual.py` indexes and searches textualized visual interpretations separately. `models.py` defines text results, `langchain.py` adapts text search, and `evaluation.py` scores ranked IDs. |
 | [`src/rag_ai/generation/`](../src/rag_ai/generation/) | Typed structured-output contract and local Ollama `/api/chat` provider. |
 | [`src/rag_ai/rag/`](../src/rag_ai/rag/) | Bounded evidence context, prompt instructions, and single-turn retrieval/generation/citation coordination. |
 | [`src/rag_ai/vision/`](../src/rag_ai/vision/) | Phase 8 typed local VLM boundary and application-owned visual evidence; it does not write to PostgreSQL or produce text-RAG citations. |
-| [`src/rag_ai/storage/`](../src/rag_ai/storage/) | `postgres.py` writes text records and performs exact cosine search. `visual.py` atomically replaces collection-scoped visual occurrences. `migrate.py` and SQL migrations `0001`/`0002` provide explicit versioned schema commands. |
+| [`src/rag_ai/storage/`](../src/rag_ai/storage/) | `postgres.py` writes text records and performs exact cosine search. `visual.py` persists source occurrences; `interpretations.py` persists immutable model output; `visual_retrieval.py` stores and searches derived vectors. `migrate.py` and SQL migrations `0001`–`0004` provide explicit versioned schema commands. |
 
 ## Implemented indexing flow
 
@@ -51,7 +51,7 @@ flowchart LR
 
 `api/retrieval.py` calls the synchronous service in a threadpool and closes the Ollama provider after each request. The service validates exactly one finite, nonzero query vector and passes its measured model name, digest, and dimensions to the existing store. The store checks **indexed embeddings**, then ranks only materialized, same-dimension, same-model, nonzero candidates in one read-only repeatable-read snapshot; the filter must precede `<=>` because stored vectors may have mixed dimensions. It fetches chunk text only for top ranked IDs. SQL joins and filters include `collection_id`; ties use document/chunk identifiers for deterministic ordering. Results carry filename and PDF page metadata but no raw vectors. The LangChain adapter delegates to the same service rather than searching independently. `evaluation.py` calculates Recall@K, Hit@K, and MRR from actual ranked IDs; the separate nine-document synthetic fixture tests ranking at K=1 and K=3.
 
-Migrations do not run at API startup. `python -m rag_ai.storage status|upgrade|adopt-legacy` invokes the migration runner; version 3 is required by this branch. Existing version-1, version-2, and unversioned databases require a verified backup and separately authorized upgrade or adoption. See [database migrations](DATABASE_MIGRATIONS.md).
+Migrations do not run at API startup. `python -m rag_ai.storage status|upgrade|adopt-legacy` invokes the migration runner; version 4 is required by this branch. Existing version-1, version-2, version-3, and unversioned databases require a verified backup and separately authorized upgrade or adoption. See [database migrations](DATABASE_MIGRATIONS.md).
 
 ## Trust boundaries and tests
 
@@ -81,10 +81,14 @@ The merged opt-in [`tests/test_local_rag_e2e.py`](../tests/test_local_rag_e2e.py
 
 `api/visual_elements.py` separately gates POST indexing and paginated GET listing for already indexed PDFs. `storage/visual.py` reads and verifies the stored PDF; `documents/visual_elements.py` adapts Phase 8 inspection into strict candidates with normalized displayed-page coordinates and deterministic occurrence IDs. Extraction runs outside the write transaction. The store locks the document row, rechecks source identity, and atomically reconciles one extractor's set. `0002_visual_elements.sql` binds each row to `(collection_id, document_id)` and cascades on deletion. Text chunks, embeddings, and answer contracts are unaffected.
 
-## Phase 9A.2 interpretation flow on this feature branch
+## Phase 9A.2 interpretation flow on main
 
 `api/interpretations.py` accepts one complete collection/document/element key and predefined vision task under a separate development flag. `storage/interpretations.py` loads the stored element; `storage/visual.py` verifies original PDF identity. `vision/persistence.py` checks displayed-page geometry, reuses `documents/render.py`, hashes the PNG, and calls `vision/ollama.py` with the Phase 8 task prompt. The provider verifies the configured local model digest through `/api/tags` before and after inference. The store then locks and rechecks the document and element before inserting one immutable, unverified interpretation. A UUID request key supports retries; list and retrieve remain collection scoped. No database transaction spans rendering or inference.
 
+## Phase 9B.1 visual text retrieval on this feature branch
+
+`api/visual_retrieval.py` separately gates one-interpretation indexing and collection visual search. `retrieval/visual.py` labels and bounds a deterministic representation of description and observations, then reuses the local EmbeddingGemma provider. `storage/visual_retrieval.py` rechecks the exact source under short locks, inserts one versioned derived vector, and performs compatible cosine ranking in a repeatable-read snapshot. Results include original PDF page and coordinates with unverified status. Text search and answer routes are unchanged; combined ranking and true image-based search remain future work.
+
 ## Planned, not implemented
 
-Cloud providers, multimodal retrieval and citations, LangGraph workflows, MCP tools, and the React frontend remain roadmap items. Caller/document authorization is also not implemented.
+Cloud providers, combined text/visual retrieval and answer citations, true image-based search, LangGraph workflows, MCP tools, and the React frontend remain roadmap items. Caller/document authorization is also not implemented.

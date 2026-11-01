@@ -105,3 +105,10 @@ Branch `feat/semantic-retrieval` starts from merged `main` at `4521f18`. This im
 2. Add strict local Ollama digest verification and a service that loads a stored element/PDF, checks geometry, renders and hashes the region, runs a versioned task, then rechecks source state under a short database lock before insertion.
 3. Add separately gated development routes and Pydantic response contracts for analyze, list, and retrieve; preserve Phase 8 and 9A.1 routes.
 4. Add focused mocked and disposable PostgreSQL tests, update architecture/roadmap/security docs, and verify focused/full tests, compilation, diff, credentials, and Git state. Risks: Ollama cannot atomically bind a chat response to a digest; native PDF processing still lacks process isolation.
+
+## Phase 9B.1 local visual semantic retrieval (approved, 2026-11-01)
+
+1. Add `0004_visual_retrieval.sql` with exact interpretation and embedding-space foreign keys, model revision/dimensions, vector checks, text-format provenance, and cascade deletion. Keep earlier migrations unchanged.
+2. Add an explicit one-interpretation indexing service that textualizes only bounded description/observations, embeds through the existing local provider, and atomically rechecks and persists the derived vector. Add collection-scoped compatible cosine search with deterministic source-provenance results.
+3. Add separately gated development indexing/search routes, strict Pydantic requests, and sanitized errors. Do not change text search or run vision inference.
+4. Add synthetic unit/API/PostgreSQL tests, update architecture/roadmap/database/testing/security docs, verify focused and full suites against a verified disposable database, perform one small local Ollama check if practical, and review compilation, diff, secrets, and Git state. Risks: unverified model interpretations remain searchable; development routes lack caller authorization.
