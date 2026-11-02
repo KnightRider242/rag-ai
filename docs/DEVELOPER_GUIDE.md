@@ -66,3 +66,7 @@ Before implementation, describe the user behavior, learning goal, alternatives, 
 ## Local database operations
 
 The [PostgreSQL operations guide](DATABASE_MIGRATIONS.md) explains password management, private backups, archive checks, and backup-first explicit adoption of an unversioned Phase 4 schema. Reading it does not authorize any state-changing operation. A later session log records user-approved adoption to version 1; this guide does not re-verify the live database state.
+
+# Combined retrieval (Phase 9B.2)
+
+`CombinedRetrievalService` validates one local query embedding and sends it to `PostgresCombinedRetrievalStore`. That store checks populated embedding spaces and executes both bounded cosine searches inside one repeatable-read, read-only transaction. The service assigns a reciprocal rank fusion score to each modality rank, keeps the first ranked interpretation per visual element, sorts text first on score ties, and applies overall `top_k`. The response retains original cosine distances and PDF displayed-point coordinates. These scores do not measure factual support; visual descriptions carry `verification_status: unverified`. No visual inference runs during search. For debugging, check the endpoint gate, local Ollama availability, model digest/dimensions, and disposable database schema before inspecting ranks.

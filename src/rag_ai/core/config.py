@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     enable_visual_element_storage_endpoint: bool = False
     enable_visual_interpretation_endpoint: bool = False
     enable_visual_retrieval_endpoint: bool = False
+    enable_multimodal_retrieval_endpoint: bool = False
     enable_document_index_endpoint: bool = False
     enable_document_retrieval_endpoint: bool = False
     enable_rag_answer_endpoint: bool = False
@@ -81,6 +82,8 @@ class Settings(BaseSettings):
             raise ValueError("Visual interpretation cannot be enabled in production.")
         if self.app_env == "production" and self.enable_visual_retrieval_endpoint:
             raise ValueError("Visual retrieval cannot be enabled in production.")
+        if self.app_env == "production" and self.enable_multimodal_retrieval_endpoint:
+            raise ValueError("Multimodal retrieval cannot be enabled in production.")
         if self.app_env == "production" and self.enable_document_index_endpoint:
             raise ValueError("Document indexing cannot be enabled in production.")
         if self.app_env == "production" and self.enable_document_retrieval_endpoint:

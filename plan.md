@@ -1,5 +1,12 @@
 # Phase 5 semantic retrieval plan
 
+## Phase 9B.2 combined retrieval (approved, 2026-11-02)
+
+1. Add strict combined result models and a service that embeds one query, validates its vector, fuses bounded text and visual candidates with deterministic RRF, and deduplicates visual elements.
+2. Add one PostgreSQL read path using a single repeatable-read, read-only transaction for both collection-scoped compatibility checks and exact cosine searches. Preserve existing search endpoints and schema.
+3. Add a separately gated development API route and setting with sanitized failures; cover service ranking, API gates, and disposable PostgreSQL snapshot, isolation, and provenance behavior.
+4. Update concise retrieval, roadmap, architecture, and security documentation; run focused and full tests against a verified disposable database, a local embedding smoke check if available, compilation, diff, and secret checks. Leave changes uncommitted. Risks: unauthenticated localhost routes and unverified visual interpretation content.
+
 ## Phase 9A.1 visual-element persistence (approved, 2026-11-01)
 
 1. Add `0002_visual_elements.sql` with composite document ownership, constrained displayed-page geometry, provenance, and cascade deletion. Keep `0001` unchanged; update migration tests for fresh and version-1 disposable schemas.

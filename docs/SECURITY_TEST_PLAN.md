@@ -1,6 +1,6 @@
 # Security test plan
 
-This plan covers Phases 1–6, 8, 9A.1, and 9A.2 on `main`, plus Phase 9B.1 local visual retrieval on the current feature branch. It records tests and remaining risks, not a security audit or production approval.
+This plan covers Phases 1–6, 8, 9A.1, 9A.2, and 9B.1 on `main`, plus Phase 9B.2 combined retrieval on the current feature branch. It records tests and remaining risks, not a security audit or production approval.
 
 ## Threat model and protected assets
 
@@ -80,3 +80,7 @@ The development routes have no authentication or tenant permissions and must be 
 - Explicit versioned SQL migrations track checksums and reject unknown or changed histories. An unversioned Phase 4 schema must be backed up and explicitly adopted after shape verification; partial or incompatible schemas are rejected. Integration tests use disposable schemas so they do not alter existing application records. The Compose database role remains a broad development role. The element budget is checked after one bounded provider batch because dimensions are measured from the response; that first batch still consumes local inference resources. Temporary staging avoids retaining all vectors in Python and keeps the permanent write transaction short, but holds one database connection during embedding and uses temporary database space. Large uploads and model execution can still consume CPU, RAM, and disk before application limits fully apply.
 - Phase 5 retrieval returns stored text through an unauthenticated development route. UUIDs are not secrets or authorization tokens. Public or shared use is blocked until caller identity, collection/document permissions, ingress and query-rate controls, database least privilege, and cross-tenant authorization tests exist. Filtering by collection protects against accidental SQL join leakage, not a caller choosing another collection UUID. Exact search may scan many stored vectors; benchmark and bound database work before wider use. A missing collection still requires a local query embedding before the store can return an empty list.
 - Before LLM, embedding, or tracing integrations, require explicit authorization for confidential data transfer, provider retention controls, and tests that prevent prompt injection from gaining system authority.
+
+# Phase 9B.2 combined retrieval review
+
+The development-only combined route has no caller or document authorization; bind the API and Ollama to loopback and do not publish the route. Collection-scoped SQL, strict model compatibility, a read-only snapshot, bounded candidate counts, and sanitized API errors limit accidental cross-collection disclosure and inconsistent evidence. Synthetic negative tests cover route gating, invalid vectors, provider errors, mixed models, isolation, and concurrent deletion. These controls do not make generated interpretations verified facts or provide public access control.
