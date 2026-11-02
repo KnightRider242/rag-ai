@@ -2,9 +2,9 @@
 
 These decisions describe the approved direction as of 2026-10-28. They guide future work; they do not imply that planned integrations exist. Revisit a decision on its feature branch if implementation evidence warrants a change, and record the reason.
 
-## Current baseline (`main` and Phase 9B.1 feature branch)
+## Current baseline (`main` and Phase 9B.2 feature branch)
 
-Stable `main` includes Phases 1–6, 8, 9A.1, and 9A.2: text RAG, visual processing, source metadata, and immutable local visual interpretations. This Phase 9B.1 feature branch adds semantic search over the interpretation text. Development routes have no authentication or collection authorization and are restricted to trusted localhost use. There is no cloud provider, agent, MCP tool, or frontend.
+Stable `main` includes Phases 1–6, 8, 9A.1, 9A.2, and 9B.1: text RAG, visual processing, source metadata, immutable local interpretations, and separate visual search. This Phase 9B.2 branch adds combined retrieval. Development routes have no authentication or collection authorization and are restricted to trusted localhost use. There is no cloud provider, agent, MCP tool, or frontend.
 
 ## AD-01 — Local-first and explicit processing location
 
@@ -36,7 +36,7 @@ Stable `main` includes Phases 1–6, 8, 9A.1, and 9A.2: text RAG, visual process
 
 **Reason:** Answers need verifiable evidence, and later multimodal features need source provenance.
 
-**Implementation status:** Phase 4 retains original source bytes, filenames, document IDs, chunk IDs, and PDF page numbers in the local database. Phase 6 resolves request-local labels to these retrieved source locations. Phase 8 assigns upload hashes and PDF page/region or standalone-image coordinates to returned visual observations without storing those interpretations. Phases 9A.1 and 9A.2 on `main` persist source regions and unverified local interpretations. Phase 9B.1 on this branch makes those interpretations searchable; combined answer citations remain planned. Citation resolution does not establish factual entailment.
+**Implementation status:** Phase 4 retains original source bytes, filenames, document IDs, chunk IDs, and PDF page numbers in the local database. Phase 6 resolves request-local labels to these retrieved source locations. Phase 8 assigns upload hashes and PDF page/region or standalone-image coordinates to returned visual observations without storing those interpretations. Phases 9A.1 and 9A.2 on `main` persist source regions and unverified local interpretations. Phase 9B.1 makes those interpretations searchable; Phase 9B.2 combines retrieval without generating answers. Combined answer citations remain planned. Citation resolution does not establish factual entailment.
 
 ## AD-05 — Separate evaluation data and security gates
 
@@ -108,4 +108,12 @@ Stable `main` includes Phases 1–6, 8, 9A.1, and 9A.2: text RAG, visual process
 
 **Reason:** Interpretation text is searchable without rerunning vision inference or mixing its trust level with source metadata and verified facts. Exact foreign keys and short final write transactions keep derived vectors tied to surviving source rows. A separate search route preserves the existing text search contract.
 
-**Status and limits:** Implemented on `feat/local-visual-retrieval` pending review. This searches model-generated text, not image pixels. It does not combine text and visual ranking or feed visual evidence into answers. Development routes remain unauthenticated and unsuitable for public use.
+**Status and limits:** Merged on `main`. This searches model-generated text, not image pixels. Development routes remain unauthenticated and unsuitable for public use.
+
+## AD-14 — Fuse text and visual retrieval in one snapshot (Phase 9B.2)
+
+**Decision:** Embed the question once, reject incompatible populated embedding spaces, and run both exact cosine searches in one PostgreSQL repeatable-read, read-only transaction. Fuse bounded candidate ranks with `1 / (60 + rank)`, prefer text on ties, and retain one interpretation per visual element. Return typed source provenance and original cosine distances.
+
+**Reason:** One snapshot keeps both candidate sets consistent during concurrent source changes. Rank fusion allows unlike cosine distributions to share a deterministic result list without treating either distance as a probability.
+
+**Status and limits:** Implemented on `feat/combined-multimodal-retrieval` pending review. RRF is a heuristic: its score is not factual confidence, and a fixed candidate pool can miss relevant evidence. Interpretations remain unverified; the route does not generate answers or perform image-to-image search.
