@@ -3,7 +3,7 @@
 from typing import Literal
 
 import httpx
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, StrictBool, ValidationError
 
 from rag_ai.core.config import validate_local_ollama_url
 from rag_ai.generation.base import (
@@ -19,7 +19,7 @@ class _Message(BaseModel):
 class _ChatResponse(BaseModel):
     model: str
     message: _Message
-    done: bool
+    done: StrictBool
     done_reason: Literal["stop"]
 
 
@@ -72,7 +72,7 @@ class OllamaGenerationProvider:
                         raise GenerationError("Local generation response exceeded the configured limit.")
                     body.extend(part)
             envelope = _ChatResponse.model_validate_json(body)
-            if envelope.model != self.model_name or not envelope.done or not envelope.message.content.strip():
+            if envelope.model != self.model_name or envelope.done is not True or not envelope.message.content.strip():
                 raise GenerationError("Local generation returned an invalid response.")
             structured = GENERATION_OUTPUT_ADAPTER.validate_json(envelope.message.content)
             return GeneratedAnswer.model_validate(structured.model_dump())

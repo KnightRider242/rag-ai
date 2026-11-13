@@ -1,6 +1,6 @@
 # RAG-AI development roadmap
 
-This roadmap separates merged code, current branch work, and plans. Phases 1–6, 8, 9A.1, 9A.2, and 9B.1 are merged on `main`. Phase 9B.2 is feature-branch work on `feat/combined-multimodal-retrieval`. A small Phase 8 `qwen3-vl:4b-instruct` evaluation returned HTTP 200 for 15 requests but exposed interpretation errors; see the [local testing guide](LOCAL_RAG_TESTING.md#phase-8-visual-testing-on-main). It is not an accuracy benchmark.
+This roadmap separates merged code, current branch work, and plans. Phases 1–6, 8, 9A.1, 9A.2, 9B.1, and 9B.2 are merged on `main`. Phase 9C is feature-branch work on `feat/grounded-multimodal-answers`. A small Phase 8 `qwen3-vl:4b-instruct` evaluation returned HTTP 200 for 15 requests but exposed interpretation errors; see the [local testing guide](LOCAL_RAG_TESTING.md#phase-8-visual-testing-on-main). It is not an accuracy benchmark.
 
 | Phase | Status | Intended outcome |
 | --- | --- | --- |
@@ -15,7 +15,8 @@ This roadmap separates merged code, current branch work, and plans. Phases 1–6
 | 9A.1. Visual metadata persistence | Merged on `main` | Store and list bounded source occurrences from already indexed PDFs, scoped to collection and document. No model inference. |
 | 9A.2. Visual interpretation persistence | Merged on `main` | Persist immutable local model interpretations with source, prompt, rendered-image, and model-digest provenance. |
 | 9B.1. Local visual semantic retrieval | Merged | Embed persisted interpretation descriptions and observations locally; search compatible vectors with source coordinates and unverified status. |
-| 9B.2. Combined text and visual retrieval | Feature-branch work, pending review | One query embedding and one database snapshot for both candidate sets; deterministic RRF and typed source provenance. No answer generation. |
+| 9B.2. Combined text and visual retrieval | Merged | One query embedding and one database snapshot for both candidate sets; deterministic RRF and typed source provenance. No answer generation. |
+| 9C. Grounded multimodal answers | Feature-branch work, pending review | Local generation over bounded text and unverified visual interpretations, typed application-resolved citations, abstention, and fresh source checks. |
 | 10. LangGraph agentic workflows | Planned | Add bounded, observable workflows only where they improve a defined user task; enforce tool and data permissions. |
 | 11. MCP tool integration | Planned | Expose or consume approved tools through MCP with explicit scopes, validation, and audit controls. |
 | 12. React frontend | Planned | Build a user interface for authorized document and answer workflows, including citation inspection. |
@@ -31,7 +32,7 @@ This roadmap separates merged code, current branch work, and plans. Phases 1–6
 - Add functional and security tests for each new attack surface. Do not treat a completed phase or passing tests as a production security approval.
 - Add automated Windows, macOS, and Linux test coverage as integrations arrive. Keep development fixtures separate from evaluation datasets and record platform-specific limitations rather than assuming parity.
 
-Phase 6 adds single-turn local answers from retrieved text with application-resolved citations and explicit abstention. Phase 8 visual processing remains separate from text-RAG. Phases 9A.1 and 9A.2 persist source metadata and unverified local interpretations. Phase 9B.1 searches text embeddings of those interpretations. Phase 9B.2 combines retrieval results; visual answer citations and true image-based search remain future work. Public document access remains blocked by missing authentication, authorization, ingress limits, and stronger resource isolation.
+Phase 6 adds single-turn local answers from retrieved text with application-resolved citations and explicit abstention. Phase 8 visual processing remains separate from text-RAG. Phases 9A.1 and 9A.2 persist source metadata and unverified local interpretations. Phase 9B.1 searches text embeddings of those interpretations. Phase 9B.2 combines retrieval results; Phase 9C adds a separate multimodal answer path. True image-based search remains future work. Public document access remains blocked by missing authentication, authorization, ingress limits, and stronger resource isolation.
 
 The merged PDF-to-answer path has a reproducible [manual and automated test](LOCAL_RAG_TESTING.md). Hardware-aware installation, Docker/Podman support, cross-platform packaging, and release documentation remain future requirements; the local E2E test does not establish them.
 

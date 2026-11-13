@@ -108,6 +108,18 @@ def test_missing_termination_reason_is_rejected() -> None:
         provider.close()
 
 
+@pytest.mark.parametrize("done", [1, "true", "1", None])
+def test_completion_requires_literal_boolean_true(done: object) -> None:
+    payload = _response('{"status":"insufficient_evidence","claims":[]}').json()
+    payload["done"] = done
+    provider = _provider(httpx.MockTransport(lambda request: httpx.Response(200, json=payload)))
+    try:
+        with pytest.raises(GenerationError):
+            provider.generate(system_prompt="safe", user_prompt="synthetic", config=GenerationConfig())
+    finally:
+        provider.close()
+
+
 @pytest.mark.parametrize("role", ["user", "system", "", None])
 def test_non_assistant_role_is_rejected(role: str | None) -> None:
     payload = _response('{"status":"insufficient_evidence","claims":[]}').json()

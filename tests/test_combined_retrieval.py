@@ -16,11 +16,15 @@ from rag_ai.documents.parser import parse_document
 from rag_ai.documents.visual_elements import extract_visual_elements
 from rag_ai.embeddings.base import EmbeddingBatch, EmbeddingError
 from rag_ai.embeddings.ollama import OllamaEmbeddingProvider
+from rag_ai.generation.base import GeneratedAnswer, GenerationConfig
 from rag_ai.main import create_app
+from rag_ai.rag.context import ContextLimits
+from rag_ai.rag.multimodal import CitationError, MultimodalRAGService
 from rag_ai.retrieval.combined import CombinedRetrievalService
 from rag_ai.retrieval.models import RetrievedChunk
 from rag_ai.retrieval.visual import RetrievedVisualInterpretation, VisualRetrievalError, VisualRetrievalService
 from rag_ai.storage.combined_retrieval import PostgresCombinedRetrievalStore
+from rag_ai.storage.answer_sources import PostgresAnswerSourceResolver
 from rag_ai.storage.interpretations import PostgresInterpretationStore
 from rag_ai.storage.migrate import MigrationRunner
 from rag_ai.storage.postgres import ModelDimensionMismatch, ModelNameMismatch, ModelRevisionMismatch, PostgresIndexStore
@@ -215,6 +219,88 @@ def test_disposable_combined_search(isolated_database_url):
     _index_text(dsn, collection, text="second model", model="other", revision="d" * 64)
     with pytest.raises(ModelNameMismatch):
         service.search(collection_id=collection, query="pump")
+
+
+def test_answer_source_recheck_fails_closed_after_deletion_and_cross_collection(isolated_database_url):
+    dsn = isolated_database_url
+    MigrationRunner(dsn).upgrade()
+    collection, other = uuid4(), uuid4()
+    text_document = _index_text(dsn, collection)
+    visual_document = _index_visual(dsn, collection)
+    sources = CombinedRetrievalService(provider=Provider(),
+        store=PostgresCombinedRetrievalStore(dsn)).search(
+            collection_id=collection, query="pump", top_k=2).results
+    resolver = PostgresAnswerSourceResolver(dsn)
+    assert resolver.verify_sources(collection_id=collection, sources=sources)
+    assert not resolver.verify_sources(collection_id=other, sources=sources)
+    text_source = next(item for item in sources if item.evidence_type == "text_chunk")
+    with psycopg.connect(dsn) as connection:
+        connection.execute("UPDATE indexed_chunks SET content = %s WHERE collection_id = %s "
+                           "AND document_id = %s AND chunk_id = %s",
+                           ("changed synthetic text", collection, text_source.document_id, text_source.chunk_id))
+    assert not resolver.verify_sources(collection_id=collection, sources=sources)
+    with psycopg.connect(dsn) as connection:
+        connection.execute("DELETE FROM indexed_documents WHERE collection_id = %s AND document_id = %s",
+                           (collection, visual_document))
+    assert not resolver.verify_sources(collection_id=collection, sources=sources)
+    with psycopg.connect(dsn) as connection:
+        connection.execute("DELETE FROM indexed_documents WHERE collection_id = %s AND document_id = %s",
+                           (collection, text_document))
+    assert not resolver.verify_sources(collection_id=collection, sources=sources)
+
+
+def test_answer_source_recheck_fractional_pdf_coordinates(isolated_database_url):
+    dsn = isolated_database_url
+    MigrationRunner(dsn).upgrade()
+    collection = uuid4()
+    document_id = _index_visual(dsn, collection)
+    with psycopg.connect(dsn) as connection:
+        element_id = connection.execute(
+            "SELECT element_id FROM visual_elements WHERE collection_id = %s AND document_id = %s",
+            (collection, document_id),
+        ).fetchone()[0]
+        connection.execute(
+            "UPDATE visual_elements SET x0 = 12.1234, y0 = 20.5678 "
+            "WHERE collection_id = %s AND document_id = %s AND element_id = %s",
+            (collection, document_id, element_id),
+        )
+    sources = CombinedRetrievalService(provider=Provider(),
+        store=PostgresCombinedRetrievalStore(dsn)).search(
+            collection_id=collection, query="pump", top_k=1).results
+    assert len(sources) == 1 and sources[0].evidence_type == "visual_interpretation"
+    assert (sources[0].x0, sources[0].y0) == (12.1234, 20.5678)
+    resolver = PostgresAnswerSourceResolver(dsn)
+    assert resolver.verify_sources(collection_id=collection, sources=sources)
+    with psycopg.connect(dsn) as connection:
+        connection.execute(
+            "UPDATE visual_elements SET x0 = 12.1235 "
+            "WHERE collection_id = %s AND document_id = %s AND element_id = %s",
+            (collection, document_id, element_id),
+        )
+    assert not resolver.verify_sources(collection_id=collection, sources=sources)
+
+
+def test_answer_rejects_source_deleted_during_generation(isolated_database_url):
+    dsn = isolated_database_url
+    MigrationRunner(dsn).upgrade()
+    collection = uuid4()
+    document_id = _index_text(dsn, collection)
+
+    class DeletingGenerator:
+        def generate(self, **kwargs):
+            with psycopg.connect(dsn) as connection:
+                connection.execute("DELETE FROM indexed_documents WHERE collection_id = %s "
+                                   "AND document_id = %s", (collection, document_id))
+            return GeneratedAnswer.model_validate({"status": "answered", "claims": [
+                {"text": "Synthetic claim", "source_ids": ["T1"]}]})
+
+    service = MultimodalRAGService(
+        retriever=CombinedRetrievalService(provider=Provider(),
+            store=PostgresCombinedRetrievalStore(dsn)), generator=DeletingGenerator(),
+        resolver=PostgresAnswerSourceResolver(dsn), context_limits=ContextLimits(),
+        generation_config=GenerationConfig())
+    with pytest.raises(CitationError):
+        service.answer(collection_id=collection, query="pump", top_k=1)
 
 
 def test_visual_limit_applies_after_element_deduplication(isolated_database_url):
