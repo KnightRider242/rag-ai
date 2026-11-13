@@ -164,6 +164,31 @@ def test_pdf_chunks_preserve_page_boundaries_and_metadata() -> None:
     assert len({chunk.chunk_id for chunk in result.chunks}) == result.total_chunks
 
 
+def test_pdf_nul_normalization_precedes_deterministic_chunk_identity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original_get_text = pymupdf.Page.get_text
+
+    def extracted_with_nul(page: pymupdf.Page, *args: object, **kwargs: object) -> str:
+        return original_get_text(page, *args, **kwargs).replace("equation", "\x00equation")
+
+    monkeypatch.setattr(pymupdf.Page, "get_text", extracted_with_nul)
+    with pymupdf.open() as pdf:
+        pdf.new_page().insert_text((72, 72), "Café equation")
+        pdf.new_page().insert_text((72, 72), "Second page")
+        content = pdf.tobytes()
+    def parse_same_bytes() -> ParsedDocument:
+        return parse_document(filename="report.pdf", content_type="application/pdf", content=content,
+                              max_size_bytes=1_000_000, max_pdf_pages=500,
+                              max_extracted_characters=1_000_000)
+    first = chunk_document(parse_same_bytes())
+    second = chunk_document(parse_same_bytes())
+    assert [chunk.page_number for chunk in first.chunks] == [1, 2]
+    assert all("\x00" not in chunk.text for chunk in first.chunks)
+    assert "Café �equation" in first.chunks[0].text
+    assert [chunk.chunk_id for chunk in first.chunks] == [chunk.chunk_id for chunk in second.chunks]
+
+
 def test_empty_pdf_page_is_skipped() -> None:
     result = chunk_document(pdf_document("First", "", "Third"), chunk_size=100, chunk_overlap=0)
 

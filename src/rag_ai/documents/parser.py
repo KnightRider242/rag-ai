@@ -18,6 +18,7 @@ ALLOWED_CONTENT_TYPES: dict[str, set[str]] = {
 class PageText(BaseModel):
     page_number: int
     text: str
+    replaced_nul_count: int = Field(default=0, ge=0)
 
 
 class ExtractionMetadata(BaseModel):
@@ -82,6 +83,10 @@ def parse_document(
             text = content.decode("utf-8")
         except UnicodeDecodeError as exc:
             raise DocumentParseError("invalid_encoding", "Text files must use UTF-8 encoding.", 422) from exc
+        if "\x00" in text:
+            raise DocumentParseError(
+                "invalid_text_character", "Text files cannot contain NUL characters.", 422
+            )
         if not text.strip():
             raise DocumentParseError("empty_document", "The document has no text content.", 422)
         if len(text) > max_extracted_characters:
@@ -117,6 +122,16 @@ def _parse_pdf(
             total_characters = 0
             for index, page in enumerate(document):
                 page_text = page.get_text("text")
+                # PostgreSQL TEXT cannot store NUL. Replace only this invalid
+                # extractor character with a visible marker; keep source bytes
+                # and every other Unicode character unchanged.
+                if any(0xD800 <= ord(char) <= 0xDFFF for char in page_text):
+                    raise DocumentParseError(
+                        "invalid_pdf_text", "The PDF contains invalid extracted Unicode.", 422
+                    )
+                replaced_nul_count = page_text.count("\x00")
+                if replaced_nul_count:
+                    page_text = page_text.replace("\x00", "\ufffd")
                 # The final text joins pages with two newlines; count those
                 # separators now so the returned text cannot exceed the cap.
                 total_characters += len(page_text) + (2 if index else 0)
@@ -124,7 +139,8 @@ def _parse_pdf(
                     raise DocumentParseError(
                         "extracted_text_too_large", "The extracted text exceeds the configured limit.", 413
                     )
-                pages.append(PageText(page_number=index + 1, text=page_text))
+                pages.append(PageText(page_number=index + 1, text=page_text,
+                                      replaced_nul_count=replaced_nul_count))
             if not any(page.text.strip() for page in pages):
                 has_images = any(page.get_image_info() for page in document)
                 code = "scanned_pdf" if has_images else "empty_document"

@@ -51,6 +51,10 @@ class VisualPage(BaseModel):
     drawing_bounds: list[ImageBounds] = Field(description="Visible vector path boxes in displayed page points.")
     drawing_kinds: DrawingKinds
     table_count: int = Field(description="Heuristically detected tables, including off-page tables.")
+    skipped_oversized_text_tables: int = Field(
+        default=0, ge=0,
+        description="Text-fallback detections skipped before cell extraction because they exceed the cell cap.",
+    )
     tables: list[VisualTable]
 
 
@@ -137,14 +141,19 @@ def inspect_pdf(
                 # PyMuPDF's line strategy detects drawn grids; its text strategy
                 # provides a heuristic fallback for borderless text tables.
                 found = page.find_tables().tables
-                if not found:
+                text_fallback = not found
+                if text_fallback:
                     found = page.find_tables(strategy="text").tables
                 total_tables += len(found)
                 if total_tables > MAX_REPORTED_TABLES:
                     raise DocumentParseError("too_many_tables", "The PDF exceeds the table limit.", 413)
                 tables: list[VisualTable] = []
+                skipped_oversized_text_tables = 0
                 for table in found:
                     if table.row_count * table.col_count > MAX_TABLE_CELLS:
+                        if text_fallback:
+                            skipped_oversized_text_tables += 1
+                            continue
                         raise DocumentParseError("too_many_cells", "A table exceeds the cell limit.", 413)
                     cells = table.extract()
                     total_characters += sum(len(cell or "") for row in cells for cell in row)
@@ -159,7 +168,8 @@ def inspect_pdf(
                     has_text=bool(page.get_text("text").strip()),
                     image_count=len(images), image_bounds=bounds,
                     drawing_count=len(drawings), drawing_bounds=drawing_bounds, drawing_kinds=kinds,
-                    table_count=len(found), tables=tables,
+                    table_count=len(found), skipped_oversized_text_tables=skipped_oversized_text_tables,
+                    tables=tables,
                 ))
             result = VisualInspection(
                 document_id=sha256(content).hexdigest(), filename=safe_name,

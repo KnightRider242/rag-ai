@@ -177,6 +177,23 @@ def test_excessive_table_cells_rejected(monkeypatch: pytest.MonkeyPatch) -> None
         inspect(pdf())
 
 
+def test_oversized_text_fallback_is_skipped_but_small_table_is_kept(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    oversized = SimpleNamespace(row_count=52, col_count=9,
+                                extract=lambda: (_ for _ in ()).throw(AssertionError("must not extract")))
+    small = SimpleNamespace(row_count=1, col_count=2, bbox=(30, 30, 90, 50),
+                            extract=lambda: [["A", "B"]])
+    monkeypatch.setattr(pymupdf.Page, "find_tables", lambda self, **kwargs:
+                        SimpleNamespace(tables=[oversized, small] if kwargs.get("strategy") == "text" else []))
+    page = inspect(pdf()).pages[0]
+    assert page.table_count == 2
+    assert page.skipped_oversized_text_tables == 1
+    assert len(page.tables) == 1
+    assert page.tables[0].cells == [["A", "B"]]
+    assert page.drawing_count == 1
+
+
 def test_table_text_budget_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
     import rag_ai.documents.visual as visual
     monkeypatch.setattr(visual, "MAX_TABLE_CHARACTERS", 1)

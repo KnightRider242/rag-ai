@@ -14,6 +14,13 @@
 - Before substantial multi-file implementation, write a concise 3–5 step `plan.md` covering affected files, downstream effects, verification, and risks, then request implementation approval. Existing explicit approval for that scope satisfies this gate; do not ask again.
 - When reviewing backend changes, trace relevant effects across FastAPI routes, Pydantic models, PostgreSQL storage, and provider integrations. Consider Windows, macOS, and Linux behavior and use existing tests and tooling before proposing dependencies.
 
+### Graphify-assisted development
+
+- For nontrivial sessions involving unfamiliar code, multiple modules, architecture, or dependencies, prefer Graphify for initial code discovery when available. Verify the repository identity, index availability, and indexed commit before relying on its results.
+- Use targeted graph queries with bounded responses; prefer skeleton mode for initial exploration over reading entire directories or large source files. Skip Graphify for trivial, single-file changes or when direct local inspection is cheaper.
+- Read the relevant local source before modifying code. The working tree is authoritative; Graphify may omit uncommitted changes. Use its dependency and linked-test results to identify possible impact, never as complete coverage or proof of correctness.
+- If Graphify is unavailable, stale, or insufficient, continue with targeted local searches. Never send credentials, private document contents, or local environment secrets to Graphify. Graphify is an optional development-time tool, not a runtime dependency.
+
 ## Learning-first feature development
 
 For each new feature or phase, work through **brainstorm → learn → explore → design → approve → implement → review and learn**. Discuss requirements, alternatives, trade-offs, and learning goals; explain the relevant concepts; trace the existing code and data flow; then propose the architecture and concise plan. Brainstorming alone does not authorize implementation. Obtain explicit approval before substantial implementation, except where the scope was already approved. Commit, push, and merge still require separate explicit authorization.
