@@ -127,3 +127,10 @@ Branch `feat/semantic-retrieval` starts from merged `main` at `4521f18`. This im
 3. Wire a development-only API flag and route with existing sanitized error conventions.
 4. Add focused negative, API, and disposable PostgreSQL tests; run focused and full suites, compilation, and diff checks.
 5. Update roadmap, architecture, developer and security docs, then append the session log. Risks: interpretation uncertainty, prompt injection, source changes during generation, and missing factual entailment checks.
+
+## Real-PDF end-to-end evaluation baseline (approved, 2026-11-13)
+
+1. Add a test-only manifest, sanitized result models, and a runner under `tests/evaluation/` that reuses existing FastAPI parse/index/visual/combined-answer routes and the established database preflight.
+2. Add an authored synthetic PDF and approximately 16 independently specified synthetic questions; keep real PDF paths and human judgments external, with missing source labels explicitly unscored.
+3. Add focused evaluator tests for manifest validation, stage orchestration, metrics, citation provenance, abstention, sanitization, and unsafe destination rejection. Preserve production code and schema.
+4. Document setup, measurement denominators, pending real-PDF work, and limits; run focused tests, relevant regressions, compilation, and diff/security checks. Risks: no approved real PDFs, costly visual inference, and structural checks being mistaken for factual support.

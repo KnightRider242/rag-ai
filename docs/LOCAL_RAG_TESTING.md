@@ -8,7 +8,7 @@ The E2E regression is merged on stable `main`. This guide separates the user's *
 
 ## Prerequisites and safe startup
 
-Use Python 3.12+, the project's existing virtual environment, Docker Compose with PostgreSQL/pgvector, and a native local Ollama installation. Confirm that `embeddinggemma:300m` and `qwen3:4b-instruct` are already installed; this guide does not download models. The application database named by your private `DATABASE_URL` must have a compatible, already-migrated schema. Phases 8, 9A.1, and 9A.2 are merged on `main`; Phase 9B.1 visual text retrieval is on this feature branch and requires schema version 4. See the [README setup](../README.md#local-setup) and [database operations guide](DATABASE_MIGRATIONS.md) if prerequisites are missing.
+Use Python 3.12+, the project's existing virtual environment, Docker Compose with PostgreSQL/pgvector, and a native local Ollama installation. Confirm that `embeddinggemma:300m` and `qwen3:4b-instruct` are already installed; this guide does not download models. The application database named by your private `DATABASE_URL` must have a compatible, already-migrated schema. Phases 8 through 9C are merged on `main`; visual retrieval requires schema version 4. See the [README setup](../README.md#local-setup) and [database operations guide](DATABASE_MIGRATIONS.md) if prerequisites are missing.
 
 In your existing, Git-ignored `.env`, retain your own `DATABASE_URL`, PostgreSQL role, and password. Do not overwrite that file. Enable only these development routes and local models:
 
@@ -214,9 +214,11 @@ In the correction session, the focused preflight run passed **15 tests** and des
 
 ## Limits of this verification
 
+The separate [real-PDF evaluation baseline](REAL_PDF_EVALUATION_BASELINE.md) documents a test-only Phase 9C harness and the conditions for a later approved, independently labeled real-document run. Its current 16-case example is synthetic; no real-PDF measurements have been claimed.
+
 The development routes have no caller authentication or collection authorization. They are disabled by default and must remain on trusted localhost; public or shared deployment is unsupported. Indexing into the ordinary application database retains original document bytes, chunks, and vectors until explicit deletion, with no automatic expiry. The E2E fixture cleans up only its own disposable test schema.
 
-These tests do not guarantee factual grounding, security against prompt injection, disconnected-network operation, Windows/macOS runtime behavior, or large-document performance. OCR, visual interpretation persistence, multimodal retrieval, and a frontend are not implemented. No cloud request was made during local E2E testing; separate cloud-provider development branches are unmerged and are not part of this stable-main local workflow. The [roadmap](ROADMAP.md) lists later work without treating it as current capability.
+These tests do not guarantee factual grounding, security against prompt injection, disconnected-network operation, Windows/macOS runtime behavior, or large-document performance. OCR and a frontend are not implemented. No cloud request was made during local E2E testing; separate cloud-provider development branches are unmerged and are not part of this stable-main local workflow. The [roadmap](ROADMAP.md) lists later work without treating it as current capability.
 
 ## Phase 8 visual testing on main
 

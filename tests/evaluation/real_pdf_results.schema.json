@@ -1,0 +1,445 @@
+{
+  "$defs": {
+    "CaseResult": {
+      "additionalProperties": false,
+      "properties": {
+        "case_id": {
+          "title": "Case Id",
+          "type": "string"
+        },
+        "category": {
+          "enum": [
+            "text",
+            "visual",
+            "mixed",
+            "unanswerable"
+          ],
+          "title": "Category",
+          "type": "string"
+        },
+        "ground_truth_verified": {
+          "default": false,
+          "title": "Ground Truth Verified",
+          "type": "boolean"
+        },
+        "failure_stage": {
+          "anyOf": [
+            {
+              "enum": [
+                "parsing",
+                "indexing",
+                "extraction",
+                "interpretation",
+                "retrieval",
+                "context",
+                "generation",
+                "citation_verification"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Failure Stage"
+        },
+        "failure_code": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Failure Code"
+        },
+        "answer_status": {
+          "anyOf": [
+            {
+              "enum": [
+                "answered",
+                "insufficient_evidence"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Answer Status"
+        },
+        "text_hit": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Text Hit"
+        },
+        "text_relevant_found": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Text Relevant Found"
+        },
+        "text_relevant_total": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Text Relevant Total"
+        },
+        "text_recall": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Text Recall"
+        },
+        "text_reciprocal_rank": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Text Reciprocal Rank"
+        },
+        "visual_hit": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Visual Hit"
+        },
+        "combined_coverage": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Combined Coverage"
+        },
+        "citation_identity_correct": {
+          "default": 0,
+          "title": "Citation Identity Correct",
+          "type": "integer"
+        },
+        "citation_count": {
+          "default": 0,
+          "title": "Citation Count",
+          "type": "integer"
+        },
+        "answer_status_correct": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Answer Status Correct"
+        },
+        "abstention_correct": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Abstention Correct"
+        },
+        "human_answer_supported": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Human Answer Supported"
+        },
+        "human_visual_interpretation_accurate": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Human Visual Interpretation Accurate"
+        },
+        "text_retrieval_seconds": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Text Retrieval Seconds"
+        },
+        "visual_retrieval_seconds": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Visual Retrieval Seconds"
+        },
+        "combined_retrieval_seconds": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Combined Retrieval Seconds"
+        },
+        "answer_endpoint_seconds": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Answer Endpoint Seconds"
+        },
+        "generation_seconds": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Generation Seconds"
+        }
+      },
+      "required": [
+        "case_id",
+        "category"
+      ],
+      "title": "CaseResult",
+      "type": "object"
+    },
+    "Metric": {
+      "properties": {
+        "numerator": {
+          "title": "Numerator",
+          "type": "number"
+        },
+        "denominator": {
+          "title": "Denominator",
+          "type": "integer"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Value"
+        }
+      },
+      "required": [
+        "numerator",
+        "denominator",
+        "value"
+      ],
+      "title": "Metric",
+      "type": "object"
+    },
+    "VisualCandidate": {
+      "properties": {
+        "document_alias": {
+          "title": "Document Alias",
+          "type": "string"
+        },
+        "element_id": {
+          "title": "Element Id",
+          "type": "string"
+        },
+        "page_number": {
+          "title": "Page Number",
+          "type": "integer"
+        },
+        "element_type": {
+          "title": "Element Type",
+          "type": "string"
+        },
+        "coordinate_system": {
+          "title": "Coordinate System",
+          "type": "string"
+        },
+        "x0": {
+          "title": "X0",
+          "type": "string"
+        },
+        "y0": {
+          "title": "Y0",
+          "type": "string"
+        },
+        "x1": {
+          "title": "X1",
+          "type": "string"
+        },
+        "y1": {
+          "title": "Y1",
+          "type": "string"
+        }
+      },
+      "required": [
+        "document_alias",
+        "element_id",
+        "page_number",
+        "element_type",
+        "coordinate_system",
+        "x0",
+        "y0",
+        "x1",
+        "y1"
+      ],
+      "title": "VisualCandidate",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "dataset_kind": {
+      "enum": [
+        "synthetic",
+        "real"
+      ],
+      "title": "Dataset Kind",
+      "type": "string"
+    },
+    "document_count": {
+      "title": "Document Count",
+      "type": "integer"
+    },
+    "case_count": {
+      "title": "Case Count",
+      "type": "integer"
+    },
+    "cases": {
+      "items": {
+        "$ref": "#/$defs/CaseResult"
+      },
+      "title": "Cases",
+      "type": "array"
+    },
+    "metrics": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Metric"
+      },
+      "title": "Metrics",
+      "type": "object"
+    },
+    "stage_failures": {
+      "additionalProperties": {
+        "type": "integer"
+      },
+      "title": "Stage Failures",
+      "type": "object"
+    },
+    "selected_visual_interpretations": {
+      "title": "Selected Visual Interpretations",
+      "type": "integer"
+    },
+    "visual_candidate_count": {
+      "title": "Visual Candidate Count",
+      "type": "integer"
+    },
+    "visual_candidates": {
+      "items": {
+        "$ref": "#/$defs/VisualCandidate"
+      },
+      "title": "Visual Candidates",
+      "type": "array"
+    },
+    "visual_interpretation_seconds": {
+      "items": {
+        "type": "number"
+      },
+      "title": "Visual Interpretation Seconds",
+      "type": "array"
+    }
+  },
+  "required": [
+    "dataset_kind",
+    "document_count",
+    "case_count",
+    "cases",
+    "metrics",
+    "stage_failures",
+    "selected_visual_interpretations",
+    "visual_candidate_count",
+    "visual_candidates",
+    "visual_interpretation_seconds"
+  ],
+  "title": "EvaluationReport",
+  "type": "object"
+}
