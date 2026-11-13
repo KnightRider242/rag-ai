@@ -1,0 +1,36 @@
+{
+  "dataset_kind": "synthetic",
+  "top_k": 3,
+  "documents": [
+    {
+      "alias": "pump_manual",
+      "path": "REPLACE_WITH_SYNTHETIC_PUMP_PDF_PATH",
+      "approved_for_local_evaluation": false,
+      "selected_visual_elements": []
+    },
+    {
+      "alias": "alarm_manual",
+      "path": "REPLACE_WITH_SYNTHETIC_ALARM_PDF_PATH",
+      "approved_for_local_evaluation": false,
+      "selected_visual_elements": []
+    }
+  ],
+  "cases": [
+    {"id":"text_pump","category":"text","query":"What moves coolant through the radiator?","expected_status":"answered","expected_answer":"The blue coolant pump.","labels_verified_from_source":false,"relevant_text":[{"document":"pump_manual","page_number":1,"chunk_index":0}]},
+    {"id":"text_valve","category":"text","query":"At what temperature does valve V7 open?","expected_status":"answered","expected_answer":"80 C.","labels_verified_from_source":false,"relevant_text":[{"document":"pump_manual","page_number":1,"chunk_index":0}]},
+    {"id":"text_relay","category":"text","query":"What disconnects motor power after an emergency stop?","expected_status":"answered","expected_answer":"Safety relay K2.","labels_verified_from_source":false,"relevant_text":[{"document":"alarm_manual","page_number":1,"chunk_index":0}]},
+    {"id":"text_reset","category":"text","query":"What is required before alarm reset?","expected_status":"answered","expected_answer":"Manual acknowledgement.","labels_verified_from_source":false,"relevant_text":[{"document":"alarm_manual","page_number":1,"chunk_index":0}]},
+    {"id":"visual_radiator","category":"visual","query":"Which labeled component is downstream of PUMP P1 in the diagram?","expected_status":"answered","expected_answer":"RADIATOR R1.","labels_verified_from_source":false,"relevant_visual":[{"document":"pump_manual","page_number":2}]},
+    {"id":"visual_flow","category":"visual","query":"Which direction does the pump diagram arrow point?","expected_status":"answered","expected_answer":"From PUMP P1 toward RADIATOR R1.","labels_verified_from_source":false,"relevant_visual":[{"document":"pump_manual","page_number":2}]},
+    {"id":"visual_chain","category":"visual","query":"Which labeled component appears between STOP BUTTON and MOTOR in the diagram?","expected_status":"answered","expected_answer":"RELAY K2.","labels_verified_from_source":false,"relevant_visual":[{"document":"alarm_manual","page_number":2}]},
+    {"id":"visual_alarm","category":"visual","query":"Which table code denotes low coolant?","expected_status":"answered","expected_answer":"A2.","labels_verified_from_source":false,"relevant_visual":[{"document":"alarm_manual","page_number":3}]},
+    {"id":"mixed_cooling","category":"mixed","query":"What moves coolant and which diagram component follows it?","expected_status":"answered","expected_answer":"The blue coolant pump moves coolant toward RADIATOR R1.","labels_verified_from_source":false,"relevant_text":[{"document":"pump_manual","page_number":1,"chunk_index":0}],"relevant_visual":[{"document":"pump_manual","page_number":2}]},
+    {"id":"mixed_valve","category":"mixed","query":"At what temperature does valve V7 open, and where is it shown in the diagram?","expected_status":"answered","expected_answer":"80 C; at the pump inlet.","labels_verified_from_source":false,"relevant_text":[{"document":"pump_manual","page_number":1,"chunk_index":0}],"relevant_visual":[{"document":"pump_manual","page_number":2}]},
+    {"id":"mixed_stop","category":"mixed","query":"What does the text say disconnects power, and which diagram label matches it?","expected_status":"answered","expected_answer":"Safety relay K2, labeled RELAY K2.","labels_verified_from_source":false,"relevant_text":[{"document":"alarm_manual","page_number":1,"chunk_index":0}],"relevant_visual":[{"document":"alarm_manual","page_number":2}]},
+    {"id":"mixed_pressure","category":"mixed","query":"Where does the manual direct readers for pressure alerts, and what table code is high pressure?","expected_status":"answered","expected_answer":"The alarm table; A1.","labels_verified_from_source":false,"relevant_text":[{"document":"alarm_manual","page_number":1,"chunk_index":0}],"relevant_visual":[{"document":"alarm_manual","page_number":3}]},
+    {"id":"unknown_warranty","category":"unanswerable","query":"What is the warranty period?","expected_status":"insufficient_evidence","expected_answer":null,"labels_verified_from_source":false},
+    {"id":"unknown_voltage","category":"unanswerable","query":"What is the motor operating voltage?","expected_status":"insufficient_evidence","expected_answer":null,"labels_verified_from_source":false},
+    {"id":"unknown_fuse","category":"unanswerable","query":"What is the fuse rating?","expected_status":"insufficient_evidence","expected_answer":null,"labels_verified_from_source":false},
+    {"id":"unknown_cloud","category":"unanswerable","query":"Which cloud API receives telemetry?","expected_status":"insufficient_evidence","expected_answer":null,"labels_verified_from_source":false}
+  ]
+}
