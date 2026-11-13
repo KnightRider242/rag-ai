@@ -7,6 +7,7 @@ from pathlib import Path
 import httpx
 import pymupdf
 import pytest
+from pydantic import SecretStr
 
 from rag_ai.core.config import Settings
 from rag_ai.documents.parser import DocumentParseError, ParsedDocument, parse_document
@@ -75,6 +76,61 @@ def test_multi_page_pdf_extraction() -> None:
     assert [page.page_number for page in result.extraction_metadata.pages] == [1, 2]
     assert "First page" in result.extraction_metadata.pages[0].text
     assert "Second page" in result.extraction_metadata.pages[1].text
+
+
+def test_pdf_nul_is_visibly_replaced_without_changing_source_identity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    content = pdf_bytes("Café equation")
+    original_get_text = pymupdf.Page.get_text
+
+    def extracted_with_nul(page: pymupdf.Page, *args: object, **kwargs: object) -> str:
+        return original_get_text(page, *args, **kwargs).replace("equation", "\x00equation")
+
+    monkeypatch.setattr(pymupdf.Page, "get_text", extracted_with_nul)
+    result = parse("paper.pdf", "application/pdf", content)
+    assert result.document_id == sha256(content).hexdigest()
+    assert result.text == "Café �equation\n"
+    assert result.extraction_metadata.pages[0].replaced_nul_count == 1
+    assert "\x00" not in result.text
+
+
+def test_pdf_invalid_surrogate_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
+    content = pdf_bytes("Synthetic")
+    monkeypatch.setattr(pymupdf.Page, "get_text", lambda self, *args, **kwargs: "bad\ud800text")
+    with pytest.raises(DocumentParseError) as error:
+        parse("paper.pdf", "application/pdf", content)
+    assert error.value.code == "invalid_pdf_text"
+    assert error.value.status_code == 422
+
+
+@pytest.mark.parametrize("filename,media_type", [("notes.txt", "text/plain"),
+                                                  ("notes.md", "text/markdown")])
+def test_text_upload_rejects_nul_before_indexing(filename: str, media_type: str) -> None:
+    with pytest.raises(DocumentParseError) as error:
+        parse(filename, media_type, b"safe\x00unsafe")
+    assert error.value.code == "invalid_text_character"
+    assert error.value.status_code == 422
+    response = post_file(filename, media_type, b"safe\x00unsafe")
+    assert response.status_code == 422
+    assert response.json()["detail"]["code"] == "invalid_text_character"
+
+
+def test_nul_text_index_route_rejects_before_database_access() -> None:
+    settings = Settings(app_env="development", enable_document_parse_endpoint=True,
+                        enable_document_index_endpoint=True,
+                        database_url=SecretStr("postgresql://invalid.invalid/test"), _env_file=None)
+    app = create_app(settings)
+
+    async def request() -> httpx.Response:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),
+                                     base_url="http://test") as client:
+            return await client.post("/collections/00000000-0000-0000-0000-000000000001/documents/index",
+                                     files={"file": ("notes.txt", b"safe\x00unsafe", "text/plain")})
+
+    response = asyncio.run(request())
+    assert response.status_code == 422
+    assert response.json()["detail"]["code"] == "invalid_text_character"
 
 
 def test_plain_text_extraction() -> None:

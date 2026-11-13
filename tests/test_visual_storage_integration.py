@@ -52,6 +52,35 @@ def _save(dsn: str, collection_id, source: tuple[object, bytes, object]) -> None
                                                             vectors=[[0.1, 0.2] for _ in chunked.chunks]))
 
 
+def test_pdf_nul_normalization_persists_original_bytes_and_safe_chunks(
+    isolated_database_url: str, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original_get_text = pymupdf.Page.get_text
+
+    def extracted_with_nul(page: pymupdf.Page, *args: object, **kwargs: object) -> str:
+        return original_get_text(page, *args, **kwargs).replace("source", "\x00source")
+
+    monkeypatch.setattr(pymupdf.Page, "get_text", extracted_with_nul)
+    MigrationRunner(isolated_database_url).upgrade()
+    document, content, chunked = _source()
+    collection_id = uuid4()
+    assert document.document_id == sha256(content).hexdigest()
+    assert document.extraction_metadata.pages[0].replaced_nul_count == 1
+    _save(isolated_database_url, collection_id, (document, content, chunked))
+    with psycopg.connect(isolated_database_url) as connection:
+        stored = connection.execute(
+            "SELECT original_content FROM indexed_documents WHERE collection_id = %s AND document_id = %s",
+            (collection_id, document.document_id),
+        ).fetchone()
+        chunks = connection.execute(
+            "SELECT content FROM indexed_chunks WHERE collection_id = %s ORDER BY chunk_index",
+            (collection_id,),
+        ).fetchall()
+    assert stored == (content,)
+    assert [item[0] for item in chunks] == [item.text for item in chunked.chunks]
+    assert all("\x00" not in item[0] for item in chunks)
+
+
 def test_upgrade_from_version_1_preserves_text_and_vectors(isolated_database_url: str) -> None:
     script = files("rag_ai.storage.migrations").joinpath("0001_initial.sql").read_text(encoding="utf-8")
     with psycopg.connect(isolated_database_url) as connection:

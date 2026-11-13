@@ -134,3 +134,9 @@ Branch `feat/semantic-retrieval` starts from merged `main` at `4521f18`. This im
 2. Add an authored synthetic PDF and approximately 16 independently specified synthetic questions; keep real PDF paths and human judgments external, with missing source labels explicitly unscored.
 3. Add focused evaluator tests for manifest validation, stage orchestration, metrics, citation provenance, abstention, sanitization, and unsafe destination rejection. Preserve production code and schema.
 4. Document setup, measurement denominators, pending real-PDF work, and limits; run focused tests, relevant regressions, compilation, and diff/security checks. Risks: no approved real PDFs, costly visual inference, and structural checks being mistaken for factual support.
+## 2026-11-13 — Research PDF ingestion blockers (`fix/research-pdf-ingestion`)
+
+1. Normalize only invalid PDF-extracted NUL characters in `documents/parser.py` before page metadata and chunking; reject NUL in UTF-8 text uploads. Keep source bytes, SHA-256 identity, page numbering, and all other Unicode unchanged.
+2. In `documents/visual.py`, skip oversized text-fallback table candidates before cell extraction, report skipped counts, and retain existing drawn-grid, image, vector, and resource limits. `visual_elements.py` continues to derive IDs from accepted geometry.
+3. Add synthetic parser, chunking, visual, and disposable PostgreSQL regressions, including stable element IDs and source bytes; document the exact policy and its limits.
+4. Run focused and relevant tests, compile, inspect the diff, then verify both exact external PDFs through existing routes in an isolated disposable database. Update only inspected IDs in the external manifest. Risks: changed chunk IDs for formerly invalid PDF text and further PDF-specific extraction limits.

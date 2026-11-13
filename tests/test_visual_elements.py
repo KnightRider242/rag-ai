@@ -1,6 +1,7 @@
 """Synthetic source occurrence, identity, and route-boundary checks."""
 
 from hashlib import sha256
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pymupdf
@@ -51,6 +52,20 @@ def test_repeated_rasters_and_rotation_have_distinct_stable_ids() -> None:
     assert any(item.element_type == "vector_path" for item in first)
     changed = _extract(content, "2")
     assert [item.element_id for item in first] != [item.element_id for item in changed]
+
+
+def test_skipped_text_fallback_preserves_independent_element_ids(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    content = _pdf()
+    before = _extract(content)
+    oversized = SimpleNamespace(row_count=57, col_count=10,
+                                extract=lambda: (_ for _ in ()).throw(AssertionError("must not extract")))
+    monkeypatch.setattr(pymupdf.Page, "find_tables", lambda self, **kwargs:
+                        SimpleNamespace(tables=[oversized] if kwargs.get("strategy") == "text" else []))
+    after = _extract(content)
+    assert [item.element_id for item in after] == [item.element_id for item in before]
+    assert {item.element_type for item in after} == {"raster_occurrence", "vector_path"}
 
 
 def test_normalized_geometry_is_identity_geometry() -> None:
