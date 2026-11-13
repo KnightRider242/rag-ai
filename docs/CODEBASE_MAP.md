@@ -1,6 +1,6 @@
 # Codebase map
 
-This map describes Phases 1–6, 8, 9A.1, and 9A.2 on `main`, plus Phase 9B.1 visual retrieval on `feat/local-visual-retrieval`. Check the linked code when changing behavior; [architecture decisions](ARCHITECTURE_DECISIONS.md) explain the broader direction and [the roadmap](ROADMAP.md) separates later phases.
+This map describes Phases 1–6, 8, 9A.1, 9A.2, 9B.1, and 9B.2 on `main`, plus Phase 9C answers on `feat/grounded-multimodal-answers`. Check the linked code when changing behavior; [architecture decisions](ARCHITECTURE_DECISIONS.md) explain the broader direction and [the roadmap](ROADMAP.md) separates later phases.
 
 ## Entry points and boundaries
 
@@ -85,10 +85,14 @@ The merged opt-in [`tests/test_local_rag_e2e.py`](../tests/test_local_rag_e2e.py
 
 `api/interpretations.py` accepts one complete collection/document/element key and predefined vision task under a separate development flag. `storage/interpretations.py` loads the stored element; `storage/visual.py` verifies original PDF identity. `vision/persistence.py` checks displayed-page geometry, reuses `documents/render.py`, hashes the PNG, and calls `vision/ollama.py` with the Phase 8 task prompt. The provider verifies the configured local model digest through `/api/tags` before and after inference. The store then locks and rechecks the document and element before inserting one immutable, unverified interpretation. A UUID request key supports retries; list and retrieve remain collection scoped. No database transaction spans rendering or inference.
 
-## Phase 9B.1 visual text retrieval on this feature branch
+## Phase 9B.1 visual text retrieval on main
 
-`api/visual_retrieval.py` separately gates one-interpretation indexing and collection visual search. `retrieval/visual.py` labels and bounds a deterministic representation of description and observations, then reuses the local EmbeddingGemma provider. `storage/visual_retrieval.py` rechecks the exact source under short locks, inserts one versioned derived vector, and performs compatible cosine ranking in a repeatable-read snapshot. Results include original PDF page and coordinates with unverified status. Text search and answer routes are unchanged; combined ranking and true image-based search remain future work.
+`api/visual_retrieval.py` separately gates one-interpretation indexing and collection visual search. `retrieval/visual.py` labels and bounds a deterministic representation of description and observations, then reuses the local EmbeddingGemma provider. `storage/visual_retrieval.py` rechecks the exact source under short locks, inserts one versioned derived vector, and performs compatible cosine ranking in a repeatable-read snapshot. Results include original PDF page and coordinates with unverified status.
+
+## Phase 9B.2 and 9C retrieval-to-answer flow
+
+`retrieval/combined.py` embeds one query and fuses text chunks with stored visual interpretations from `storage/combined_retrieval.py` in one collection-scoped snapshot. Phase 9C keeps `/answer` unchanged and separately gates `/multimodal-answer`. `rag/multimodal.py` quotes complete bounded evidence under request-local `T` and `V` labels, sends it to local text generation, and builds typed citations from retrieved records. `storage/answer_sources.py` checks cited records in a fresh snapshot after generation. Visual citations retain original PDF coordinates, interpretation-model provenance, and unverified status. Citation identity does not prove factual support.
 
 ## Planned, not implemented
 
-Cloud providers, combined text/visual retrieval and answer citations, true image-based search, LangGraph workflows, MCP tools, and the React frontend remain roadmap items. Caller/document authorization is also not implemented.
+Cloud providers, true image-based search, LangGraph workflows, MCP tools, and the React frontend remain roadmap items. Caller/document authorization is also not implemented.

@@ -119,3 +119,11 @@ Branch `feat/semantic-retrieval` starts from merged `main` at `4521f18`. This im
 2. Add an explicit one-interpretation indexing service that textualizes only bounded description/observations, embeds through the existing local provider, and atomically rechecks and persists the derived vector. Add collection-scoped compatible cosine search with deterministic source-provenance results.
 3. Add separately gated development indexing/search routes, strict Pydantic requests, and sanitized errors. Do not change text search or run vision inference.
 4. Add synthetic unit/API/PostgreSQL tests, update architecture/roadmap/database/testing/security docs, verify focused and full suites against a verified disposable database, perform one small local Ollama check if practical, and review compilation, diff, secrets, and Git state. Risks: unverified model interpretations remain searchable; development routes lack caller authorization.
+
+# Phase 9C implementation plan
+
+1. Add dedicated multimodal context, prompt, response models, and service under `rag/`; use combined retrieval once and resolve only request-local labels.
+2. Add a fresh, collection-scoped PostgreSQL source check before returning cited claims, and tighten the Ollama completion envelope without changing text-answer contracts.
+3. Wire a development-only API flag and route with existing sanitized error conventions.
+4. Add focused negative, API, and disposable PostgreSQL tests; run focused and full suites, compilation, and diff checks.
+5. Update roadmap, architecture, developer and security docs, then append the session log. Risks: interpretation uncertainty, prompt injection, source changes during generation, and missing factual entailment checks.

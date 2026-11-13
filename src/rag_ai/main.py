@@ -12,6 +12,7 @@ from rag_ai.api.visual_elements import router as visual_elements_router
 from rag_ai.api.interpretations import router as interpretations_router
 from rag_ai.api.visual_retrieval import router as visual_retrieval_router
 from rag_ai.api.combined_retrieval import router as combined_retrieval_router
+from rag_ai.api.multimodal_answers import router as multimodal_answer_router
 from rag_ai.core.config import Settings, get_settings
 
 
@@ -41,6 +42,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.include_router(visual_retrieval_router)
     if settings.app_env == "development" and settings.enable_multimodal_retrieval_endpoint:
         app.include_router(combined_retrieval_router)
+    if settings.app_env == "development" and settings.enable_multimodal_answer_endpoint:
+        app.include_router(multimodal_answer_router)
     if settings.app_env == "development" and settings.enable_document_retrieval_endpoint:
         app.include_router(retrieval_router)
     if settings.app_env == "development" and settings.enable_rag_answer_endpoint:

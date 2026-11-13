@@ -1,6 +1,12 @@
 # Security test plan
 
-This plan covers Phases 1–6, 8, 9A.1, 9A.2, and 9B.1 on `main`, plus Phase 9B.2 combined retrieval on the current feature branch. It records tests and remaining risks, not a security audit or production approval.
+This plan covers Phases 1–6, 8, 9A.1, 9A.2, 9B.1, and 9B.2 on `main`, plus Phase 9C multimodal answers on the current feature branch. It records tests and remaining risks, not a security audit or production approval.
+
+## Phase 9C multimodal answer review
+
+The route is disabled by default, registers only in development, and rejects production opt-in. Retrieved text and stored visual interpretations are quoted and marked untrusted. The prompt forbids following embedded instructions or adding outside knowledge. Unknown or cross-request labels fail closed; generated output cannot supply source IDs or coordinates. A fresh, collection-scoped read checks cited source metadata after generation and rejects deletion or mutation. The Ollama completion envelope requires literal `done: true` and `done_reason: stop`. Negative tests cover malicious evidence, invalid labels, oversized context, endpoint gates, and changed or cross-collection records.
+
+Residual risks: prompt injection can still affect model wording; citation identity does not prove factual entailment; visual interpretations may be inaccurate; a source can change after the final check. Development routes have no caller authorization and must remain on trusted localhost. No public deployment is approved by these tests.
 
 ## Threat model and protected assets
 
