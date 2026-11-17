@@ -140,3 +140,12 @@ Branch `feat/semantic-retrieval` starts from merged `main` at `4521f18`. This im
 2. In `documents/visual.py`, skip oversized text-fallback table candidates before cell extraction, report skipped counts, and retain existing drawn-grid, image, vector, and resource limits. `visual_elements.py` continues to derive IDs from accepted geometry.
 3. Add synthetic parser, chunking, visual, and disposable PostgreSQL regressions, including stable element IDs and source bytes; document the exact policy and its limits.
 4. Run focused and relevant tests, compile, inspect the diff, then verify both exact external PDFs through existing routes in an isolated disposable database. Update only inspected IDs in the external manifest. Risks: changed chunk IDs for formerly invalid PDF text and further PDF-specific extraction limits.
+
+## 2026-11-13 — Phase 9E multimodal context-budget fix (`fix/multimodal-context-budget`)
+
+1. Update `src/rag_ai/rag/multimodal.py` to serialize compact, quoted model evidence while retaining complete retrieved source objects in the request-local citation map. Keep the API and resolver contracts.
+2. Pack complete ranked records within the configured per-record and total character limits. Skip oversized or empty records, reject invalid visual trust state, and fail closed when none fit. Record only sanitized exclusion counts.
+3. Extend `tests/test_multimodal_answers.py` for overflow, mixed evidence, deterministic labels, unusable evidence, injection, and citation integrity. Run focused tests, the normal suite, and `git diff --check`.
+4. If the approved private manifest, a verified disposable test database, and local models are available, run one opt-in real-PDF evaluation with `--tb=line`. Update documentation and session log, then package a sanitized review TAR.
+
+Risks: fewer context records can reduce answer coverage; compact evidence still consumes tokens beyond the character budget; citation identity does not prove factual support. Preserve retrieval order and source isolation.

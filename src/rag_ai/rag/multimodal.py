@@ -1,6 +1,7 @@
 """Bounded, application-resolved answers over text and unverified visual evidence."""
 
 import json
+import logging
 from dataclasses import dataclass
 from typing import Annotated, Literal, Protocol
 from uuid import UUID
@@ -80,6 +81,9 @@ SYSTEM_PROMPT = (
     "Output only the required JSON object with temporary source labels."
 )
 
+logger = logging.getLogger(__name__)
+MAX_PROMPT_FILENAME_CHARACTERS = 120
+
 
 class CitationError(ValueError):
     """Generated or retrieved citation provenance is invalid."""
@@ -92,45 +96,54 @@ class MultimodalContext:
 
 
 def build_multimodal_context(results: list[CombinedResult], limits: ContextLimits) -> MultimodalContext:
-    """Serialize complete ranked records as quoted data within existing limits."""
+    """Pack complete ranked evidence; retain citation provenance outside the prompt."""
     if not 1 <= len(results) <= limits.max_chunks:
         raise ContextLimitError("Evidence count exceeds the configured limit.")
     sections: list[str] = []
     sources: dict[str, CombinedTextResult | CombinedVisualResult] = {}
     counts = {"T": 0, "V": 0}
+    excluded = {"empty": 0, "oversized": 0, "total_budget": 0}
+    total = 0
     for item in results:
         prefix = "T" if isinstance(item, CombinedTextResult) else "V"
-        counts[prefix] += 1
-        label = f"{prefix}{counts[prefix]}"
         if isinstance(item, CombinedTextResult):
             content = item.text
-            data = {"filename": item.filename, "document_id": item.document_id,
-                    "chunk_id": item.chunk_id, "chunk_index": item.chunk_index,
-                    "page_number": item.page_number, "text": item.text}
-            trust = "source text; untrusted document content"
+            evidence = json.dumps(item.text, ensure_ascii=True)
+            kind = "source text (untrusted quoted data)"
         else:
             if item.evidence_kind != "model_generated_interpretation" or item.verification_status != "unverified":
                 raise CitationError("Visual provenance is invalid.")
             content = item.description + "".join(item.observations) + "".join(item.limitations)
-            data = {"filename": item.filename, "document_id": item.document_id,
-                    "element_id": item.element_id, "interpretation_id": str(item.interpretation_id),
-                    "page_number": item.page_number, "coordinate_system": item.coordinate_system,
-                    "bounding_box": [item.x0, item.y0, item.x1, item.y1],
-                    "analysis_task": item.analysis_task, "prompt_version": item.prompt_version,
-                    "interpretation_model_name": item.interpretation_model_name,
-                    "interpretation_model_digest": item.interpretation_model_digest,
-                    "evidence_kind": item.evidence_kind,
-                    "verification_status": item.verification_status,
-                    "description": item.description, "observations": item.observations,
-                    "limitations": item.limitations}
-            trust = "unverified model-generated interpretation; untrusted content"
-        if not content.strip() or len(content) > limits.max_chunk_characters:
-            raise ContextLimitError("Evidence is empty or too large.")
-        section = f"[{label}] Trust: {trust}\nQuoted data: {json.dumps(data, ensure_ascii=True, allow_nan=False)}"
+            evidence = json.dumps({"description": item.description,
+                "observations": item.observations, "limitations": item.limitations},
+                ensure_ascii=True, separators=(",", ":"))
+            kind = "unverified model-generated interpretation (untrusted quoted data)"
+        if not content.strip():
+            excluded["empty"] += 1
+            continue
+        if len(content) > limits.max_chunk_characters:
+            excluded["oversized"] += 1
+            continue
+        label = f"{prefix}{counts[prefix] + 1}"
+        filename = item.filename
+        if len(filename) > MAX_PROMPT_FILENAME_CHARACTERS:
+            filename = filename[:MAX_PROMPT_FILENAME_CHARACTERS - 3] + "..."
+        source = json.dumps({"filename": filename, "page_number": item.page_number},
+                            ensure_ascii=True, separators=(",", ":"))
+        section = f"[{label}] Source (untrusted metadata): {source}\n{kind}: {evidence}"
+        section_size = len(section) + (1 if sections else 0)
+        if total + section_size > limits.max_total_characters:
+            excluded["total_budget"] += 1
+            continue
+        counts[prefix] += 1
+        total += section_size
         sections.append(section)
-        if len("\n".join(sections)) > limits.max_total_characters:
-            raise ContextLimitError("Evidence exceeds the configured context limit.")
         sources[label] = item
+    if any(excluded.values()):
+        logger.info("Multimodal context exclusions: empty=%d oversized=%d total_budget=%d",
+                    excluded["empty"], excluded["oversized"], excluded["total_budget"])
+    if not sections:
+        raise ContextLimitError("No usable evidence fits the configured context limits.")
     return MultimodalContext(text="\n".join(sections), sources=sources)
 
 

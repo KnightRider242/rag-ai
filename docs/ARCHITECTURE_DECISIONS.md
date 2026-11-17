@@ -125,3 +125,11 @@ Stable `main` includes Phases 1–6, 8, 9A.1, 9A.2, 9B.1, and 9B.2: text RAG, vi
 **Reason:** Model-authored IDs or coordinates cannot establish provenance. A source may be deleted or changed while generation runs. Visual descriptions are unverified model output and must remain labeled as such in the response.
 
 **Limits:** A valid citation establishes source identity at the verification snapshot, not semantic factual correctness or a durable post-response lock. A source can change after that check. Development route gates are not authentication.
+
+## AD-16 — Pack model evidence separately from citation provenance (Phase 9E)
+
+**Decision:** The multimodal answer context carries quoted text or unverified visual interpretation content under temporary `T` and `V` labels, plus a compact page number and JSON-quoted filename capped at 120 characters for source attribution. Complete retrieved records remain in a request-local application map for citation construction and the fresh collection-scoped source check. Count the serialized source hint against the total context budget. Iterate in retrieval order, include only complete records within the configured per-record and total character limits, and skip empty, oversized, or non-fitting records. Reject invalid visual trust state and fail closed if no record fits.
+
+**Reason:** Serializing IDs, geometry, and interpretation metadata into the model prompt caused context failures without helping the model answer. File and page hints help the model distinguish sources while complete provenance stays application-owned. Deterministic packing preserves the ranking order of included evidence.
+
+**Limits:** Character limits do not guarantee a token limit. Excluded evidence can lower answer coverage, and an included citation still does not prove factual support. Log exclusion counts only, without source IDs or content.
